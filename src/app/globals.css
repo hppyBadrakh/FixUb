@@ -1,26 +1,406 @@
 @import "tailwindcss";
 
+/* FixUB design tokens (Design System v1.0). Light theme. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --surface-sunken: #eceef2;
+  --surface-overlay: #ffffff;
+  --line: #dde1e7;
+  --line-strong: #858d9b;
+  --ink: #121722;
+  --ink-muted: #4a5262;
+  --ink-subtle: #626b7b;
+  --brand: #1b3e73;
+  --brand-hover: #142f59;
+  --brand-soft: #e4ebf5;
+  --on-brand: #ffffff;
+  --accent: #0a6b78;
+  --accent-soft: #dcf0f2;
+  --focus: #1f6fd1;
+
+  --status-reported: #2f86c8;
+  --status-reported-text: #1a5a8f;
+  --status-reported-soft: #e2eff9;
+  --on-status-reported: #ffffff;
+  --status-investigating: #e0a00f;
+  --status-investigating-text: #7a5100;
+  --status-investigating-soft: #fcf1d6;
+  --on-status-investigating: #121722;
+  --status-in-progress: #b0559a;
+  --status-in-progress-text: #86306f;
+  --status-in-progress-soft: #f6e4f0;
+  --on-status-in-progress: #ffffff;
+  --status-resolved: #0b8f68;
+  --status-resolved-text: #04684b;
+  --status-resolved-soft: #dcf2e9;
+  --on-status-resolved: #ffffff;
+  --status-closed: #7d8592;
+  --status-closed-text: #4f5764;
+  --status-closed-soft: #eceef1;
+  --on-status-closed: #ffffff;
+
+  --success: #0b6e4f;
+  --success-soft: #ddf2e9;
+  --warning: #7a5100;
+  --warning-soft: #fcf1d6;
+  --danger: #b42318;
+  --danger-soft: #fdeceb;
+  --danger-fill: #b42318;
+  --on-danger: #ffffff;
+  --scrim: rgb(18 23 34 / 0.4);
+
+  --shadow-xs: 0 1px 2px #1217220d;
+  --shadow-md: 0 2px 4px #1217220f, 0 8px 20px -4px #1217221f;
+  --shadow-lg: 0 4px 8px #12172214, 0 24px 48px -8px #1217222e;
+  --shadow-marker: 0 1px 3px #12172240;
+
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-enter: cubic-bezier(0, 0, 0.2, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  color-scheme: light;
+}
+
+/* Dark theme: applied for the OS preference unless the user chose light, or when chosen explicitly. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1219;
+    --surface: #141a23;
+    --surface-sunken: #0a0e14;
+    --surface-overlay: #1b2330;
+    --line: #262f3d;
+    --line-strong: #6a7385;
+    --ink: #e7ebf1;
+    --ink-muted: #a8b1c0;
+    --ink-subtle: #8b94a4;
+    --brand: #8fb3e8;
+    --brand-hover: #aac6f0;
+    --brand-soft: #18263d;
+    --on-brand: #0d1219;
+    --accent: #5cc2cf;
+    --accent-soft: #10303a;
+    --focus: #7fb2ff;
+    --status-reported: #5aa9e6;
+    --status-reported-text: #8cc4f0;
+    --status-reported-soft: #132a3e;
+    --on-status-reported: #0d1219;
+    --status-investigating: #e8b03a;
+    --status-investigating-text: #f0c46a;
+    --status-investigating-soft: #33280c;
+    --status-in-progress: #d283bd;
+    --status-in-progress-text: #e3a6d2;
+    --status-in-progress-soft: #361a2f;
+    --on-status-in-progress: #0d1219;
+    --status-resolved: #3cc495;
+    --status-resolved-text: #7fd9b6;
+    --status-resolved-soft: #0f3026;
+    --on-status-resolved: #0d1219;
+    --status-closed: #8d95a3;
+    --status-closed-text: #b3bac6;
+    --status-closed-soft: #232a35;
+    --on-status-closed: #0d1219;
+    --success: #6fd3ab;
+    --success-soft: #0f3026;
+    --warning: #f0c46a;
+    --warning-soft: #33280c;
+    --danger: #ff9a8f;
+    --danger-soft: #3d1714;
+    --danger-fill: #e5544a;
+    --on-danger: #0d1219;
+    --scrim: rgb(0 0 0 / 0.6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1219;
+  --surface: #141a23;
+  --surface-sunken: #0a0e14;
+  --surface-overlay: #1b2330;
+  --line: #262f3d;
+  --line-strong: #6a7385;
+  --ink: #e7ebf1;
+  --ink-muted: #a8b1c0;
+  --ink-subtle: #8b94a4;
+  --brand: #8fb3e8;
+  --brand-hover: #aac6f0;
+  --brand-soft: #18263d;
+  --on-brand: #0d1219;
+  --accent: #5cc2cf;
+  --accent-soft: #10303a;
+  --focus: #7fb2ff;
+  --status-reported: #5aa9e6;
+  --status-reported-text: #8cc4f0;
+  --status-reported-soft: #132a3e;
+  --on-status-reported: #0d1219;
+  --status-investigating: #e8b03a;
+  --status-investigating-text: #f0c46a;
+  --status-investigating-soft: #33280c;
+  --status-in-progress: #d283bd;
+  --status-in-progress-text: #e3a6d2;
+  --status-in-progress-soft: #361a2f;
+  --on-status-in-progress: #0d1219;
+  --status-resolved: #3cc495;
+  --status-resolved-text: #7fd9b6;
+  --status-resolved-soft: #0f3026;
+  --on-status-resolved: #0d1219;
+  --status-closed: #8d95a3;
+  --status-closed-text: #b3bac6;
+  --status-closed-soft: #232a35;
+  --on-status-closed: #0d1219;
+  --success: #6fd3ab;
+  --success-soft: #0f3026;
+  --warning: #f0c46a;
+  --warning-soft: #33280c;
+  --danger: #ff9a8f;
+  --danger-soft: #3d1714;
+  --danger-fill: #e5544a;
+  --on-danger: #0d1219;
+  --scrim: rgb(0 0 0 / 0.6);
+  color-scheme: dark;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-surface-overlay: var(--surface-overlay);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-subtle: var(--ink-subtle);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-soft: var(--brand-soft);
+  --color-on-brand: var(--on-brand);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-focus: var(--focus);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-fill: var(--danger-fill);
+  --color-on-danger: var(--on-danger);
+  --color-st-reported: var(--status-reported);
+  --color-st-investigating: var(--status-investigating);
+  --color-st-in-progress: var(--status-in-progress);
+  --color-st-resolved: var(--status-resolved);
+  --color-st-closed: var(--status-closed);
+  --font-sans: var(--font-golos), ui-sans-serif, system-ui, sans-serif;
+  --shadow-xs: var(--shadow-xs);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
 }
 
-@media (prefers-color-scheme: dark) {
+@theme {
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  --text-display: 30px;
+  --text-display--line-height: 38px;
+  --text-title-1: 26px;
+  --text-title-1--line-height: 34px;
+  --text-title-2: 22px;
+  --text-title-2--line-height: 30px;
+  --text-title-3: 18px;
+  --text-title-3--line-height: 26px;
+  --text-body-lg: 18px;
+  --text-body-lg--line-height: 28px;
+  --text-body: 16px;
+  --text-body--line-height: 24px;
+  --text-label: 15px;
+  --text-label--line-height: 20px;
+  --text-small: 14px;
+  --text-small--line-height: 20px;
+  --text-caption: 13px;
+  --text-caption--line-height: 18px;
+  --text-eyebrow: 12px;
+  --text-eyebrow--line-height: 16px;
+  --text-metric-xl: 36px;
+  --text-metric-xl--line-height: 40px;
+  --text-metric: 24px;
+  --text-metric--line-height: 30px;
+
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+}
+
+@media (min-width: 768px) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --text-display: 40px;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-golos), ui-sans-serif, system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 24px;
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+  [hidden] {
+    display: none !important;
+  }
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Display sizes scale up from tablet (design system: display 40/48 ≥768, title-1 30/38). */
+@media (min-width: 768px) {
+  .text-display {
+    font-size: 40px;
+    line-height: 48px;
+  }
+  .text-title-1 {
+    font-size: 30px;
+    line-height: 38px;
+  }
+}
+
+/* "Just changed" wash: accent-soft fading over duration-highlight. Kept under reduced motion. */
+@keyframes fx-wash {
+  from {
+    background-color: var(--accent-soft);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+.fx-fresh {
+  animation: fx-wash 1600ms var(--ease-standard);
+}
+
+@keyframes fx-reveal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.fx-reveal {
+  animation: fx-reveal 200ms var(--ease-enter);
+}
+
+@keyframes fx-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fx-rise {
+  animation: fx-rise 200ms var(--ease-enter);
+}
+
+@keyframes fx-dialog {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fx-dialog {
+  animation: fx-dialog 260ms var(--ease-enter);
+}
+
+@keyframes fx-badge {
+  from {
+    transform: scale(0.92);
+  }
+  to {
+    transform: none;
+  }
+}
+.fx-badge {
+  animation: fx-badge 260ms var(--ease-standard);
+}
+
+@keyframes fx-sheen {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+.fx-skeleton {
+  background: linear-gradient(90deg, var(--surface-sunken) 0%, var(--line) 50%, var(--surface-sunken) 100%);
+  background-size: 200% 100%;
+  animation: fx-sheen 1.6s linear infinite;
+}
+
+@keyframes fx-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.fx-spin {
+  animation: fx-spin 0.9s linear infinite;
+}
+
+@keyframes fx-ping {
+  from {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  to {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-reveal,
+  .fx-rise,
+  .fx-dialog,
+  .fx-badge,
+  .fx-skeleton,
+  .fx-spin {
+    animation: none !important;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0ms !important;
+  }
+}
+
+/* MapLibre controls tuned to the system. */
+.maplibregl-ctrl-group {
+  border-radius: var(--radius-sm) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+.maplibregl-ctrl-attrib {
+  font-size: 11px;
+}
+.fx-map-marker {
+  will-change: transform;
 }
