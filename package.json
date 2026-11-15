@@ -13,7 +13,13 @@
     "deploy": "opennextjs-cloudflare deploy",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "postinstall": "node scripts/copy-maplibre-worker.mjs"
+    "postinstall": "node scripts/copy-maplibre-worker.mjs",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx scripts/db/migrate.ts",
+    "db:seed": "tsx scripts/db/seed.ts",
+    "db:reset": "tsx scripts/db/reset.ts",
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose down"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.1",
@@ -41,5 +47,8 @@
     "tsx": "^4.23.15",
     "typescript": "^5",
     "wrangler": "4.156.1"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
