@@ -35,11 +35,18 @@ export function createDb({ connectionString, wsProxy }: DbOptions): DbHandle {
     neonConfig.pipelineConnect = false;
   }
   const pool = new Pool({ connectionString });
-  // Without a listener, an idle-connection error would crash the Node process.
-  pool.on("error", (err: Error) => console.error("[db] pool error:", err.message));
+  let closing = false;
+  // Without a listener, an idle-connection error would crash the Node process. Errors while
+  // closing are expected on Workers ("Network connection lost" as the socket goes away).
+  pool.on("error", (err: Error) => {
+    if (!closing) console.error("[db] pool error:", err.message);
+  });
   return {
     db: drizzle(pool, { schema }),
-    close: () => pool.end(),
+    close: () => {
+      closing = true;
+      return pool.end();
+    },
   };
 }
 
