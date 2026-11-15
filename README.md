@@ -231,8 +231,7 @@ the production system will need further verification.
 | Г. Бат-Эрдэнэ / С. Оюунчимэг | Road Maintenance staff / manager | Work their organization's reports; managers can also close and reopen |
 | Э. Ганбаатар, Ц. Мөнхзул, П. Ариунбат | Staff of Lighting / Sanitation / Drainage | Work their organization's reports |
 
-Allowed status moves follow `TRANSITIONS` in the Architecture Package (section 8); see
-`src/lib/domain/lifecycle.ts`. Staff opening another organization's report get "doesn't exist".
+Allowed status moves are in `src/lib/domain/lifecycle.ts`. Staff opening another organization's report get "doesn't exist".
 
 ## Code map
 
