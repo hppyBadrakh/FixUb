@@ -1,0 +1,85 @@
+# Runs on every pull request (and on main after a merge). A red run can't be merged once
+# branch protection requires the "check" and "database" jobs.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Lint, typecheck, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      # The same build Cloudflare runs (OpenNext). It needs no database and no secrets.
+      - run: npm run build
+
+  database:
+    name: Migrations and seed
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_USER: fixub
+          POSTGRES_PASSWORD: fixub
+          POSTGRES_DB: fixub
+        ports:
+          - 54329:5432
+        options: >-
+          --health-cmd "pg_isready -U fixub -d fixub"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+      # Neon's WebSocket proxy, so the scripts use the same driver as production.
+      ws-proxy:
+        image: ghcr.io/neondatabase/wsproxy:latest
+        env:
+          APPEND_PORT: postgres:5432
+          ALLOW_ADDR_REGEX: .*
+          LOG_TRAFFIC: "false"
+        ports:
+          - 54330:80
+    env:
+      DATABASE_URL: postgres://fixub:fixub@localhost:54329/fixub
+      DATABASE_WS_PROXY: localhost:54330/v1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Schema and migrations are in sync
+        # If src/db/schema.ts changed without `npm run db:generate`, this creates a new file.
+        run: |
+          npm run db:generate
+          if [ -n "$(git status --porcelain drizzle)" ]; then
+            echo "::error::src/db/schema.ts changed without a migration. Run 'npm run db:generate' and commit drizzle/."
+            git status --porcelain drizzle
+            exit 1
+          fi
+      - name: Migrations apply to an empty PostGIS database
+        run: npm run db:migrate
+      - name: Seed loads the 32 sample reports
+        run: |
+          npm run db:seed | tee seed.log
+          grep -q "Seeded 32 reports" seed.log

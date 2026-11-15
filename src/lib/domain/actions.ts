@@ -378,6 +378,25 @@ export function setPriority(
 }
 
 /**
+ * Shape rules of the category tree, shared by the demo and the server action: every category and
+ * subcategory has a Mongolian and an English name, ids are unique, and a category has at least
+ * one subcategory.
+ */
+export function checkCategoryTree(categories: CategoryDef[]): "invalid_input" | null {
+  const ids = new Set<string>();
+  for (const c of categories) {
+    if (!c.name.mn.trim() || !c.name.en.trim() || ids.has(c.id) || !c.subcategories.length) return "invalid_input";
+    ids.add(c.id);
+    const subIds = new Set<string>();
+    for (const sc of c.subcategories) {
+      if (!sc.name.mn.trim() || !sc.name.en.trim() || subIds.has(sc.id)) return "invalid_input";
+      subIds.add(sc.id);
+    }
+  }
+  return null;
+}
+
+/**
  * Admin-only: replace the category tree. Categories and subcategories that reports still use
  * can't be removed (renaming and reordering are always fine).
  */
@@ -387,16 +406,9 @@ export function saveCategories(
   categories: CategoryDef[],
 ): ActionResult<{ blocked?: string }> {
   if (!user || user.role !== "admin") return err("forbidden");
-  const ids = new Set<string>();
-  for (const c of categories) {
-    if (!c.name.mn.trim() || !c.name.en.trim() || ids.has(c.id) || !c.subcategories.length) return err("invalid_input");
-    ids.add(c.id);
-    const subIds = new Set<string>();
-    for (const sc of c.subcategories) {
-      if (!sc.name.mn.trim() || !sc.name.en.trim() || subIds.has(sc.id)) return err("invalid_input");
-      subIds.add(sc.id);
-    }
-  }
+  const problem = checkCategoryTree(categories);
+  if (problem) return err(problem);
+  const ids = new Set(categories.map((c) => c.id));
   for (const r of state.reports) {
     const c = categories.find((x) => x.id === r.category);
     if (!c || !c.subcategories.some((x) => x.id === r.subcategory)) return err("in_use");

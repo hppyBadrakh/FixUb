@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Build output and copied vendor files (present locally after `npm run build`):
+    ".open-next/**",
+    ".wrangler/**",
+    "public/vendor/**",
   ]),
 ]);
 
