@@ -1,21 +1,145 @@
-# FixUB — interactive prototype
+# FixUB
 
-A working demo of FixUB, a civic infrastructure reporting and tracking platform for Ulaanbaatar.
-Citizens photograph a problem with their camera, choose a category and subcategory, confirm the
-location and describe it. The FixUB team reviews each report, sets its priority and assigns it to an
-organization and repair unit; staff move it through the lifecycle; citizens see the result and
-confirm whether it's actually fixed.
+FixUB is a civic infrastructure reporting and tracking platform for Ulaanbaatar. Citizens photograph
+a problem with their camera, choose a category and subcategory, confirm the location and describe
+it. The FixUB team reviews each report, sets its priority and assigns it to an organization and
+repair unit; staff move it through the lifecycle; citizens see the result and confirm whether it's
+actually fixed.
 
-This is a **functional prototype, not the production system**. There is no backend: all data
-(reports, photos, sign-in) lives in the browser. Organizations are fictional ("demo") and are not
-connected to any government body.
+**Where the project is.** It started as a browser-only demo (all data in `localStorage`) and is
+being moved onto a real backend, screen by screen, following [TEAM_PLAN.md](TEAM_PLAN.md):
+Neon Postgres + PostGIS, Drizzle, Better Auth, Cloudflare Workers.
 
-## Run it
+- The database, sign-in, permissions and the pattern for APIs and server actions are in place.
+- One screen, `/admin/categories`, already reads and writes Postgres. It is the reference example.
+- Every other screen still runs on demo data in the browser until its owner converts it.
+- Without a `DATABASE_URL` the whole app still runs as the original browser-only demo.
+
+Organizations are fictional ("demo") and are not connected to any government body.
+
+## Setup
+
+You need **Node 22 or newer**, and **Docker Desktop** if you want a local database.
 
 ```bash
+git clone https://github.com/hppyBadrakh/FixUb.git && cd FixUb
 npm install
-npm run dev        # http://localhost:3000
+cp .env.example .env.local      # then edit .env.local (see "Environment variables")
 ```
+
+Then choose a database:
+
+**A. Local database in Docker** (works offline, nothing to sign up for). `.env.example` already has
+the right values for it.
+
+```bash
+npm run db:up        # starts Postgres + PostGIS on port 54329, and Neon's WebSocket proxy on 54330
+npm run db:migrate   # creates the tables
+npm run db:seed      # loads the 32 sample reports, organizations, categories and users
+npm run dev          # http://localhost:3000
+```
+
+**B. Your own Neon branch** (`dev-a`, `dev-b`, `dev-c`; A sends you the connection string).
+In `.env.local` set `DATABASE_URL` to that string and leave `DATABASE_WS_PROXY` **empty**. Then:
+
+```bash
+npm run db:migrate
+npm run db:seed
+npm run dev
+```
+
+**C. No database.** Leave `DATABASE_URL` empty and run `npm run dev`: you get the browser-only demo.
+
+Open http://localhost:3000/login and pick a demo role (needs `DEMO_LOGIN=true`).
+
+## Scripts
+
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Development server on http://localhost:3000 |
+| `npm run lint` · `npm run typecheck` · `npm run build` | Run all three before asking for review. CI runs them too |
+| `npm run preview` | Runs the built app on the real Workers runtime (reads `.dev.vars`) |
+| `npm run db:up` · `npm run db:down` | Start / stop the local Docker database |
+| `npm run db:migrate` | Applies the migrations in `drizzle/` that your database hasn't run yet. Run it after every `git pull` that brings a new migration |
+| `npm run db:seed` | Loads the sample data into an **empty** database. `npm run db:seed -- --force` replaces existing data |
+| `npm run db:reset` | Drops everything, re-applies all migrations and re-seeds. On a Neon branch it asks for `-- --yes`. **Never on production** |
+| `npm run db:generate` | **A only.** Turns a change in `src/db/schema.ts` into a new SQL file in `drizzle/` |
+
+## Environment variables
+
+All of them are listed with comments in [.env.example](.env.example). Local development reads
+`.env.local`; `npm run preview` reads `.dev.vars`; production reads the secrets set in the
+Cloudflare dashboard. Never commit `.env.local` or `.dev.vars`.
+
+| Variable | Needed | Value |
+| --- | --- | --- |
+| `DATABASE_URL` | for the real app | Postgres connection string. Neon: the **pooled** string of your branch. Local Docker: `postgres://fixub:fixub@localhost:54329/fixub` |
+| `DATABASE_WS_PROXY` | local Docker and CI only | `localhost:54330/v1`. Must be **empty** for Neon |
+| `BETTER_AUTH_SECRET` | for sign-in | 32+ random characters: `openssl rand -base64 32`. Different in production |
+| `BETTER_AUTH_URL` | for sign-in | The site's origin, no trailing slash: `http://localhost:3000` locally, the `workers.dev` URL in production |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | for Google sign-in | From a Google Cloud OAuth client (type "Web application"). Redirect URI: `<BETTER_AUTH_URL>/api/auth/callback/google`. Without them the login page says Google isn't set up |
+| `DEMO_LOGIN` | optional | `true` shows the demo role picker on `/login`. Anything else turns it off, and the server refuses demo sign-ins |
+
+## How the real app is built
+
+```
+Demo:      Screen → useStore().run(action) → pure function → localStorage
+Real app:  Screen → server action → Zod → getActor() → same rules → Postgres (one transaction)
+           Screen ← useApi() (SWR) ← GET /api/v1/... ← Postgres
+```
+
+Copy the reference example. Each file starts with a comment explaining the pattern:
+
+| Piece | File |
+| --- | --- |
+| Read endpoint | [src/app/api/v1/categories/route.ts](src/app/api/v1/categories/route.ts) |
+| Its SQL | [src/server/queries/categories.ts](src/server/queries/categories.ts) |
+| Server action (write) | [src/server/actions/categories.ts](src/server/actions/categories.ts) |
+| Converted screen | [src/components/pages/admin-categories.tsx](src/components/pages/admin-categories.tsx) |
+| Response types shared by server and screens | [src/lib/api/types.ts](src/lib/api/types.ts) |
+
+The building blocks (all owned by A):
+
+- **`withDb(fn)`** (`src/server/db.ts`): opens the database for one request and closes it. Call it
+  once per route handler or server action. Workers can't keep a connection between requests.
+- **`getActor(db)`** (`src/server/actor.ts`): who is calling, or `null`. An `Actor` has the same
+  shape as the demo's `User` (`id`, `name`, `role`, `organizationId`, `unitId`), so the rules in
+  `src/lib/domain` (`checkTransition`, `canWorkOn`, …) take it unchanged.
+- **Permission helpers**, which return the actor or throw:
+  `requireActor(actor)` (signed in), `requireRole(actor, "admin")`,
+  `requireOrgMember(actor, organizationId)` (admins pass; other organizations get *not found*, so
+  they can't learn what another organization holds), and `{ manager: true }` for close / reopen.
+- **`api(fn)`** (`src/server/api.ts`) wraps a `GET` handler: `{ data }` on success, `{ error: { code, message } }` otherwise.
+- **`action(schema, input, fn)`** (`src/server/action.ts`) wraps a server action: Zod validation,
+  database, and `{ ok: false, error }` with the same error codes the demo screens already handle.
+- **`AppError`** (`src/server/errors.ts`): `throw new AppError("not_found")` anywhere on the server.
+- **`useApi<T>(path)`** (`src/lib/api/hooks.ts`): SWR. Call `mutate()` after a server action; pass
+  `{ refreshInterval: LIVE_REFRESH_MS }` on dashboards that must stay live (15 s).
+- **`useStore().server.configured`** tells a screen whether there is a database. A converted screen
+  keeps its demo version for the "no database" case until week 4.
+
+**Database rules.** Only A edits `src/db/schema.ts` and creates migrations. Need a column? Ask in
+chat. Ids: reports, organizations and units are UUIDs; users are text; categories and subcategories
+are exposed by their slug (`roads`, `pothole`), which is what the demo already used as ids. Seeded
+rows have stable ids, so links survive `db:reset`.
+
+**Sign-in.** Better Auth serves `/api/auth/*` and stores users and sessions in our Postgres.
+`GET /api/v1/me` returns who is signed in and what the server supports; the client store
+(`useStore().user`) uses it whenever a database is configured. Demo personas exist in the database
+with the same ids as in the demo (`u-citizen`, `u-admin`, `u-road-staff`, …), so unconverted
+screens keep working after a demo login.
+
+## Troubleshooting
+
+- **The page keeps reloading in development.** A Next.js 16.4 / Turbopack problem: if an `/api`
+  route is the first thing compiled after the dev server starts, every page reloads forever.
+  `npm run dev` prevents it by loading a page first. If you still see it (for example after
+  starting `next dev` directly), stop the server and run `npm run dev` again.
+- **`DATABASE_URL is not set`** from a `db:` script: copy `.env.example` to `.env.local`.
+- **`db:migrate` or the app can't connect to the local database:** is Docker running?
+  `npm run db:up`, then `docker compose ps` should show `db` (healthy) and `ws-proxy`.
+- **Can't connect to Neon:** `DATABASE_WS_PROXY` must be empty, and use the *pooled* connection string.
+- **Demo login says the users are missing:** run `npm run db:seed`.
 
 ## Deploy to Cloudflare Workers
 
@@ -24,11 +148,19 @@ Pushing to `main` deploys through Cloudflare Workers Builds, using the `npm run 
 `npm run build:next` (plain `next build`) and writes the Worker to `.open-next/`.
 
 - `wrangler.jsonc` sets the Worker name. Its `WORKER_SELF_REFERENCE` service must match that name.
-- Try it locally on the real Workers runtime: `npm run build && npm run preview`.
+- Production values for the variables above are set as **secrets** in the Cloudflare dashboard
+  (Worker → Settings → Variables and Secrets), or with `npx wrangler secret put <NAME>`. Only A does this.
+- Try it locally on the real Workers runtime: copy your `.env.local` values to `.dev.vars` with
+  `BETTER_AUTH_URL=http://localhost:8787`, then `npm run build && npm run preview`.
+- **Don't run `npm run deploy` from your laptop.** The build copies the values of your `.env.local`
+  into the Worker, so a local deploy would ship your development database URL and secret. Deploy by
+  merging to `main`: Cloudflare's build has no `.env.local`.
 - Keep `cacheComponents` and `partialPrefetching` off in `next.config.ts`: with them on, every
   page returns 500 on Workers.
+- The Worker is about 2.4 MB compressed; the free plan allows 3 MB. Check
+  `npx wrangler deploy --dry-run` before adding a large library.
 
-Requires Node 20+ and a network connection for the map tiles (OpenFreeMap / OpenStreetMap).
+Requires Node 22+ and a network connection for the map tiles (OpenFreeMap / OpenStreetMap).
 `npm install` copies MapLibre's web worker into `public/vendor/` (see
 `scripts/copy-maplibre-worker.mjs`); `dev` and `build` do it again.
 
@@ -39,12 +171,16 @@ HTTPS or `localhost`. To demo on a phone, serve over HTTPS:
 npm run dev -- --experimental-https -H 0.0.0.0   # then open https://<your-ip>:3000 and accept the certificate warning
 ```
 
+With a database, also set `BETTER_AUTH_URL` to that `https://<your-ip>:3000` address for the session,
+or sign-in is refused (the origin must match).
+
 On plain `http://<your-ip>` the in-page camera is blocked; phones then get an explicit
 "Open phone camera" button that opens the camera app directly (never the photo gallery).
 
 ## A 5-minute demo script
 
-Open two browser tabs side by side. Changes in one tab appear in the other immediately.
+This walks through the screens that still run on demo data in the browser. Open two browser tabs
+side by side. Changes in one tab appear in the other immediately.
 
 1. **Tab 1 — citizen.** Go to `/login` → **Бат (Citizen)**. Press **Асуудал мэдээлэх / Report a
    problem**. The camera opens straight away: take a photo (retake if needed), choose a category
@@ -102,6 +238,15 @@ Allowed status moves follow `TRANSITIONS` in the Architecture Package (section 8
 
 ```
 src/app/                     routes: (public) site, /admin console, /staff console
+src/app/api/auth/            Better Auth endpoints (sign-in, callback, sign-out)
+src/app/api/v1/              read endpoints (GET), one folder per resource
+src/server/                  server-only code: db, auth, actor + permissions, errors, api/action wrappers
+src/server/actions/          server actions (writes), one per demo action
+src/server/queries/          SQL for the read endpoints
+src/db/                      Drizzle schema, database client, seed
+drizzle/                     SQL migrations (generated; only A adds them)
+scripts/db/                  db:migrate, db:seed, db:reset
+src/lib/api/                 useApi() hook and the API's response types
 src/components/ui/           design-system primitives (Button, form controls, Dialog, Sheet, Toasts…)
 src/components/fixub/        FixUB components (StatusBadge, ReportCard, StatusTimeline, ReportMap, KpiCard…)
 src/components/pages/        one client component per screen
@@ -111,18 +256,20 @@ src/lib/store.tsx            React provider: state, demo session, cross-tab sync
 src/lib/i18n.tsx             Mongolian-first МН/EN toggle
 ```
 
-Every mutation is a pure function in `src/lib/domain/actions.ts` taking `(state, user, input, now)`.
-The UI reads and writes only through `FixubRepository` (`src/lib/data/repository.ts`), so swapping
-localStorage for the real `/api/v1` endpoints means replacing the repository and moving these
-functions behind the API, not rewriting screens.
+Every demo mutation is a pure function in `src/lib/domain/actions.ts` taking
+`(state, user, input, now)`. Each one becomes a server action in `src/server/actions/` that keeps
+the same rules and error codes, so converting a screen means swapping its data source, not
+rewriting it (see "How the real app is built").
 
 Visual tokens, components and copy follow the FixUB Design System v1.0 (Golos Text, Tengri navy,
 five status colours with icon + word, Lucide icons).
 
-## Known limits of the prototype
+## Known limits
 
-- Data is per browser. Another device or a private window starts from the seed.
-- Sign-in is a role picker, not Google OAuth; there is no consent screen.
+- Screens that aren't converted yet keep their data per browser: another device or a private window
+  starts from the seed. Only `/admin/categories` is shared through the database so far, so a
+  category edited there doesn't reach the (still demo) report form yet.
+- Google sign-in needs a Google OAuth client to be configured; there is no consent screen yet.
 - Place search uses a small built-in list of Ulaanbaatar landmarks (no geocoding API).
 - District is guessed from the nearest district centre, not real boundaries.
 - Mongolian copy is a first draft and should be reviewed by a native editor.
