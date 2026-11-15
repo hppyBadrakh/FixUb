@@ -36,7 +36,7 @@ export function createDb({ connectionString, wsProxy }: DbOptions): DbHandle {
   }
   const pool = new Pool({ connectionString });
   // Without a listener, an idle-connection error would crash the Node process.
-  pool.on("error", (err) => console.error("[db] pool error:", err.message));
+  pool.on("error", (err: Error) => console.error("[db] pool error:", err.message));
   return {
     db: drizzle(pool, { schema }),
     close: () => pool.end(),
