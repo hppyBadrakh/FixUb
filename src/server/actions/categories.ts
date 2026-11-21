@@ -4,6 +4,7 @@
 //
 //   1. Zod        validate the input (shape, lengths, enums). Field names match the demo action.
 //   2. getActor() who is calling, then requireRole / requireOrgMember. Never trust the UI.
+//      Then rateLimit(): every write is counted per user (limits in src/server/rate-limit.ts).
 //   3. Rules      the same pure functions the demo used, from src/lib/domain.
 //   4. Postgres   read what the rules need and write, all inside ONE transaction.
 //
@@ -17,6 +18,7 @@ import { ICON_KEYS } from "@/lib/api/schemas";
 import { action } from "@/server/action";
 import { getActor, requireRole } from "@/server/actor";
 import { AppError, PG, pgErrorCode } from "@/server/errors";
+import { rateLimit } from "@/server/rate-limit";
 
 /* 1. Zod: one schema per action. The limits match the CHECK constraints in src/db/schema.ts. */
 const slug = z.string().regex(/^[a-z0-9_-]{1,60}$/);
@@ -43,6 +45,7 @@ export async function saveCategories(input: unknown) {
   return action(saveCategoriesSchema, input, async ({ db, input }) => {
     /* 2. Who is calling? Citizens and staff are refused here, whatever the UI showed them. */
     const admin = requireRole(await getActor(db), "admin");
+    await rateLimit(db, admin, "console.write");
 
     /* 3. Rules from src/lib/domain: the same check the demo ran. */
     const problem = checkCategoryTree(input.categories);

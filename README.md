@@ -58,6 +58,7 @@ Open http://localhost:3000/login and pick a demo role (needs `DEMO_LOGIN=true`).
 | --- | --- |
 | `npm run dev` | Development server on http://localhost:3000 |
 | `npm run lint` · `npm run typecheck` · `npm run build` | Run all three before asking for review. CI runs them too |
+| `npm test` | Server-side tests: permissions and rate limiting, against the database in `.env.local` (see [Tests](#tests)). `npm run test:watch` re-runs them as you edit |
 | `npm run preview` | Runs the built app on the real Workers runtime (reads `.dev.vars`) |
 | `npm run db:up` · `npm run db:down` | Start / stop the local Docker database |
 | `npm run db:migrate` | Applies the migrations in `drizzle/` that your database hasn't run yet. Run it after every `git pull` that brings a new migration |
@@ -113,6 +114,10 @@ The building blocks (all owned by A):
 - **`action(schema, input, fn)`** (`src/server/action.ts`) wraps a server action: Zod validation,
   database, and `{ ok: false, error }` with the same error codes the demo screens already handle.
 - **`AppError`** (`src/server/errors.ts`): `throw new AppError("not_found")` anywhere on the server.
+- **`rateLimit(db, actor, "report.create")`** (`src/server/rate-limit.ts`): call it in every server
+  action that writes, right after the permission check. It counts the write for that user and
+  throws `rate_limited` (429) over the limit: 10 reports an hour, 300 console changes an hour;
+  the whole list is in that file. Screens show a "too many requests" text for `rate_limited`.
 - **`useApi<T>(path)`** (`src/lib/api/hooks.ts`): SWR. Call `mutate()` after a server action; pass
   `{ refreshInterval: LIVE_REFRESH_MS }` on dashboards that must stay live (15 s).
 - **`useStore().server.configured`** tells a screen whether there is a database. A converted screen
@@ -128,6 +133,22 @@ rows have stable ids, so links survive `db:reset`.
 (`useStore().user`) uses it whenever a database is configured. Demo personas exist in the database
 with the same ids as in the demo (`u-citizen`, `u-admin`, `u-road-staff`, …), so unconverted
 screens keep working after a demo login.
+
+## Tests
+
+`npm test` runs the server-side tests in `tests/` with Vitest. CI runs them on every pull request.
+
+- They use the database in your `.env.local` (your own Neon branch, or local Docker) and need
+  `DEMO_LOGIN=true` and the seed, because they sign in as the demo personas through the real
+  demo-login endpoint. Without `DATABASE_URL` only the tests that need no database run.
+- They clean up after themselves (sessions, rate-limit counters). Allowed calls really run, so
+  the inputs in the matrix must be safe to repeat.
+- **Every server action and every `GET /api/v1/...` endpoint needs a line in
+  [tests/permission-matrix.ts](tests/permission-matrix.ts)**: who may call it, and a valid input.
+  The tests then call it as a visitor, a citizen, staff, a manager and an admin, and fail if a
+  wrong role gets through, or if an action or endpoint has no line. Add the line in the same
+  pull request as the action. Use `refusals` for cases that depend on the data, such as staff
+  opening another organization's report (`not_found`).
 
 ## Troubleshooting
 
