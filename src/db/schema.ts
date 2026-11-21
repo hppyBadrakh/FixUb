@@ -392,19 +392,22 @@ export const reportStatusEvents = pgTable(
 /**
  * Photos stored in R2. Up to three per report (positions 0–2), plus at most one completion photo
  * per status event (`status_event_id` set).
+ *
+ * A photo is uploaded before the report (or the status change) it belongs to exists: until then
+ * `report_id` is NULL and only `uploaded_by` may see or attach it (src/server/photos.ts).
  */
 export const reportImages = pgTable(
   "report_images",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    reportId: uuid("report_id")
-      .notNull()
-      .references(() => reports.id, { onDelete: "cascade" }),
+    /** NULL while the photo is uploaded but not yet attached. */
+    reportId: uuid("report_id").references(() => reports.id, { onDelete: "cascade" }),
+    uploadedBy: text("uploaded_by").references(() => users.id, { onDelete: "set null" }),
     /** Set for a completion photo attached to a status change; NULL for the citizen's photos. */
     statusEventId: bigint("status_event_id", { mode: "number" }).references(() => reportStatusEvents.id, {
       onDelete: "cascade",
     }),
-    /** R2 object key, e.g. reports/{report_id}/{id}.jpg */
+    /** R2 object key: photos/{id}.jpg */
     storageKey: text("storage_key").notNull().unique(),
     contentType: text("content_type").notNull().default("image/jpeg"),
     width: integer("width").notNull(),

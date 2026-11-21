@@ -1,5 +1,6 @@
 // Runs before every test file: reads .env.local (the same database `npm run dev` uses), and
-// replaces the one thing the server code needs from a live Next.js request: `headers()`.
+// replaces the two things the server code needs from outside: `headers()` of the live Next.js
+// request, and the Cloudflare R2 bucket for photos.
 import { existsSync } from "node:fs";
 import { vi } from "vitest";
 import { requestHeaders } from "./helpers/request";
@@ -12,3 +13,9 @@ if (process.env.CI && !process.env.DATABASE_URL) {
 }
 
 vi.mock("next/headers", () => ({ headers: async () => requestHeaders() }));
+
+// The R2 bucket binding: an in-memory stand-in, so photo tests need no Cloudflare account.
+vi.mock("@opennextjs/cloudflare", async () => {
+  const { fakeBucket } = await import("./helpers/photos");
+  return { getCloudflareContext: async () => ({ env: { PHOTOS: fakeBucket } }) };
+});
