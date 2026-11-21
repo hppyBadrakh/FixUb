@@ -44,3 +44,15 @@ export interface ApiCategory extends Omit<CategoryDef, "subcategories"> {
 export interface CategoriesResponse {
   categories: ApiCategory[];
 }
+
+/* ---- POST /api/v1/photos ---- */
+
+export interface UploadedPhoto {
+  /** Pass it to createReport (`photoIds`) or changeStatus (`photoId`). */
+  id: string;
+  /** `/api/v1/photos/{id}`: usable as an `<img src>`. */
+  url: string;
+  width: number;
+  height: number;
+  bytes: number;
+}

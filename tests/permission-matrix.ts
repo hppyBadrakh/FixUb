@@ -1,4 +1,4 @@
-// WHO MAY CALL WHAT. Every server action and every GET endpoint must have a line here:
+// WHO MAY CALL WHAT. Every server action and every /api/v1 endpoint must have a line here:
 // `npm test` fails when one is missing, and then checks that everyone else is refused.
 //
 // Adding a server action or an endpoint? Add its rule in the same pull request.
@@ -7,6 +7,7 @@ import type { ErrorCode } from "@/server/errors";
 import { withDb } from "@/server/db";
 import { listCategories } from "@/server/queries/categories";
 import type { Persona } from "./helpers/personas";
+import { jpeg, publicPhoto, rememberPhoto, uploadedBy } from "./helpers/photos";
 
 type Lazy<T> = () => T | Promise<T>;
 
@@ -31,7 +32,21 @@ export interface RouteRule {
   params?: Lazy<Record<string, string>>;
   /** For example staff reading another organization's report: 404. */
   refusals?: { name: string; as: Persona; url: Lazy<string>; params?: Lazy<Record<string, string>>; status: number }[];
+  /** The endpoint answers with a file (a photo), not with JSON `{ data }`. */
+  file?: { contentType: string };
 }
+
+/** POST / PUT / PATCH / DELETE route handlers. Most writes are server actions; uploads are not. */
+export interface WriteRouteRule {
+  /** Roles that may call it. A visitor gets 401, every other role 403. */
+  allowed: Role[];
+  /** A request that passes validation, so a refusal comes from the permission check. */
+  request: Lazy<RequestInit>;
+  /** Called with the `data` of each allowed call, to clean up what it created. */
+  created?: (data: unknown) => void;
+}
+
+const ANY_ROLE: Role[] = ["citizen", "org_staff", "org_manager", "admin"];
 
 /** The category tree as it is now: saving it again changes nothing. */
 async function currentCategoryTree() {
@@ -55,4 +70,34 @@ export const ACTIONS: Record<string, ActionRule> = {
 export const ROUTES: Record<string, RouteRule> = {
   categories: { allowed: "public" },
   me: { allowed: "public" },
+  "photos/[id]": {
+    // A photo on a visible report. Who sees an unattached or hidden one: tests/photos.db.test.ts.
+    allowed: "public",
+    file: { contentType: "image/jpeg" },
+    ...lazyPhoto(async () => (await publicPhoto()).photoId),
+    refusals: [
+      {
+        name: "another citizen's photo that isn't on a report yet",
+        as: "otherCitizen",
+        ...lazyPhoto(() => uploadedBy("citizen")),
+        status: 404,
+      },
+    ],
+  },
 };
+
+/** Key: `<METHOD> <folder under src/app/api/v1>`. */
+export const WRITE_ROUTES: Record<string, WriteRouteRule> = {
+  "POST photos": {
+    allowed: ANY_ROLE,
+    request: () => ({ method: "POST", headers: { "content-type": "image/jpeg" }, body: jpeg() }),
+    created: (data) => rememberPhoto((data as { id: string }).id),
+  },
+};
+
+/** `url` and `params` of one photo, created on first use. */
+function lazyPhoto(make: () => Promise<string>) {
+  let id: Promise<string> | undefined;
+  const get = () => (id ??= make());
+  return { url: async () => `/api/v1/photos/${await get()}`, params: async () => ({ id: await get() }) };
+}

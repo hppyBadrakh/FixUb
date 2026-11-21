@@ -118,6 +118,7 @@ The building blocks (all owned by A):
   action that writes, right after the permission check. It counts the write for that user and
   throws `rate_limited` (429) over the limit: 10 reports an hour, 300 console changes an hour;
   the whole list is in that file. Screens show a "too many requests" text for `rate_limited`.
+- **Photos** (`src/server/photos.ts`, `src/lib/api/photos.ts`): see "Photos" below.
 - **`useApi<T>(path)`** (`src/lib/api/hooks.ts`): SWR. Call `mutate()` after a server action; pass
   `{ refreshInterval: LIVE_REFRESH_MS }` on dashboards that must stay live (15 s).
 - **`useStore().server.configured`** tells a screen whether there is a database. A converted screen
@@ -134,6 +135,27 @@ rows have stable ids, so links survive `db:reset`.
 with the same ids as in the demo (`u-citizen`, `u-admin`, `u-road-staff`, …), so unconverted
 screens keep working after a demo login.
 
+## Photos
+
+Photos are stored in Cloudflare R2 (the Worker binding `PHOTOS`), with one row per photo in
+`report_images`. A photo is uploaded first and attached afterwards:
+
+1. **Upload** (screen): `const photo = await uploadPhoto(blob)` from `src/lib/api/photos.ts`,
+   with the Blob the camera gives you. It calls `POST /api/v1/photos`. The server accepts only a
+   real JPEG (checked by its bytes, not its name) of at most 4 MB, from a signed-in user, 40 an hour.
+2. **Attach** (server action): pass the ids as `photoIds` to `createReport`, which calls
+   `attachReportPhotos(tx, actor, reportId, input.photoIds)` inside its transaction. A completion
+   photo goes through `attachCompletionPhoto(tx, actor, { reportId, statusEventId }, photoId)` in
+   `changeStatus`. Both refuse a photo someone else uploaded or one that is already used.
+3. **Show**: `<img src={photoUrl(id)} />`, which is `GET /api/v1/photos/{id}`. Everyone can see
+   the photos of a visible report. A photo that isn't attached yet, or belongs to a hidden report,
+   is only served to its uploader and to admins; everyone else gets 404.
+
+`npm run dev` uses a simulated bucket on your disk (`.wrangler/`), so uploads work locally with
+no Cloudflare account. **Production has no bucket yet**: R2 must first be enabled on the
+Cloudflare account (see the comment in `wrangler.jsonc`). Until then the deployed site answers
+503 `not_configured` to photo requests.
+
 ## Tests
 
 `npm test` runs the server-side tests in `tests/` with Vitest. CI runs them on every pull request.
@@ -141,9 +163,10 @@ screens keep working after a demo login.
 - They use the database in your `.env.local` (your own Neon branch, or local Docker) and need
   `DEMO_LOGIN=true` and the seed, because they sign in as the demo personas through the real
   demo-login endpoint. Without `DATABASE_URL` only the tests that need no database run.
-- They clean up after themselves (sessions, rate-limit counters). Allowed calls really run, so
+- Photos go to an in-memory stand-in for the R2 bucket, so no Cloudflare account is needed.
+- They clean up after themselves (sessions, rate-limit counters, photos). Allowed calls really run, so
   the inputs in the matrix must be safe to repeat.
-- **Every server action and every `GET /api/v1/...` endpoint needs a line in
+- **Every server action and every `/api/v1/...` endpoint needs a line in
   [tests/permission-matrix.ts](tests/permission-matrix.ts)**: who may call it, and a valid input.
   The tests then call it as a visitor, a citizen, staff, a manager and an admin, and fail if a
   wrong role gets through, or if an action or endpoint has no line. Add the line in the same
@@ -259,14 +282,14 @@ Allowed status moves are in `src/lib/domain/lifecycle.ts`. Staff opening another
 ```
 src/app/                     routes: (public) site, /admin console, /staff console
 src/app/api/auth/            Better Auth endpoints (sign-in, callback, sign-out)
-src/app/api/v1/              read endpoints (GET), one folder per resource
+src/app/api/v1/              read endpoints (GET), one folder per resource; photos/ also takes uploads
 src/server/                  server-only code: db, auth, actor + permissions, errors, api/action wrappers
 src/server/actions/          server actions (writes), one per demo action
 src/server/queries/          SQL for the read endpoints
 src/db/                      Drizzle schema, database client, seed
 drizzle/                     SQL migrations (generated; only A adds them)
 scripts/db/                  db:migrate, db:seed, db:reset
-src/lib/api/                 useApi() hook and the API's response types
+src/lib/api/                 useApi() hook, uploadPhoto() and the API's response types
 src/components/ui/           design-system primitives (Button, form controls, Dialog, Sheet, Toasts…)
 src/components/fixub/        FixUB components (StatusBadge, ReportCard, StatusTimeline, ReportMap, KpiCard…)
 src/components/pages/        one client component per screen

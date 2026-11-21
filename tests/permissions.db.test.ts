@@ -1,10 +1,11 @@
 /// <reference types="vite/client" />
-// "Wrong role is refused for every action": each server action and each GET endpoint is called
+// "Wrong role is refused for every action": each server action and each /api/v1 endpoint is called
 // as a visitor, a citizen, staff, a manager and an admin. Who may do what is in permission-matrix.ts.
 import { afterAll, describe, expect, it } from "vitest";
 import type { ActionResult } from "@/server/action";
 import { as, EVERYONE, hasDatabase, ROLE_PERSONA, signOutEveryone, type Persona } from "./helpers/personas";
-import { ACTIONS, ROUTES, type RouteRule } from "./permission-matrix";
+import { cleanUpPhotos } from "./helpers/photos";
+import { ACTIONS, ROUTES, WRITE_ROUTES, type RouteRule } from "./permission-matrix";
 
 type Action = (input: unknown) => Promise<ActionResult>;
 type Handler = (request: Request, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>;
@@ -21,11 +22,15 @@ for (const [file, mod] of Object.entries(actionModules)) {
   }
 }
 
-/** "reports/[id]" → its GET handler. */
+/** "reports/[id]" → its GET handler; "POST photos" → that handler. */
 const routes = new Map<string, Handler>();
+const writeRoutes = new Map<string, Handler>();
 for (const [file, mod] of Object.entries(routeModules)) {
   const name = file.replace(/^.*\/api\/v1\//, "").replace(/\/route\.ts$/, "");
   if (typeof mod.GET === "function") routes.set(name, mod.GET as Handler);
+  for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+    if (typeof mod[method] === "function") writeRoutes.set(`${method} ${name}`, mod[method] as Handler);
+  }
 }
 
 const ROLE_OF = Object.fromEntries(Object.entries(ROLE_PERSONA).map(([role, persona]) => [persona, role]));
@@ -47,9 +52,15 @@ describe("the permission matrix is complete", () => {
     expect(missing, "Add these endpoints to ROUTES in tests/permission-matrix.ts").toEqual([]);
   });
 
+  it("has a rule for every endpoint that writes", () => {
+    const missing = [...writeRoutes.keys()].filter((key) => !(key in WRITE_ROUTES));
+    expect(missing, "Add these endpoints to WRITE_ROUTES in tests/permission-matrix.ts").toEqual([]);
+  });
+
   it("has no rules for things that no longer exist", () => {
     expect(Object.keys(ACTIONS).filter((key) => !actions.has(key))).toEqual([]);
     expect(Object.keys(ROUTES).filter((key) => !routes.has(key))).toEqual([]);
+    expect(Object.keys(WRITE_ROUTES).filter((key) => !writeRoutes.has(key))).toEqual([]);
   });
 });
 
@@ -85,6 +96,7 @@ describe.skipIf(!hasDatabase)("server actions refuse the wrong role", () => {
 
 describe.skipIf(!hasDatabase)("GET endpoints refuse the wrong role", () => {
   afterAll(signOutEveryone);
+  afterAll(cleanUpPhotos);
 
   for (const [key, rule] of Object.entries(ROUTES)) {
     const handler = routes.get(key);
@@ -104,6 +116,11 @@ describe.skipIf(!hasDatabase)("GET endpoints refuse the wrong role", () => {
         it(`${persona} → ${expected}`, async () => {
           const res = await call(persona, rule.url, rule.params);
           expect(res.status).toBe(expected);
+          if (allowed && rule.file) {
+            expect(res.headers.get("content-type")).toBe(rule.file.contentType);
+            expect((await res.arrayBuffer()).byteLength).toBeGreaterThan(0);
+            return;
+          }
           expect(res.headers.get("cache-control")).toBe("no-store");
           const body = (await res.json()) as { data?: unknown; error?: { code: string } };
           if (allowed) expect(body.data).toBeDefined();
@@ -131,4 +148,34 @@ describe.skipIf(!hasDatabase)("GET endpoints refuse the wrong role", () => {
     expect(await read("roadStaff")).toMatchObject({ role: "org_staff" });
     expect(await read("admin")).toMatchObject({ role: "admin" });
   });
+});
+
+describe.skipIf(!hasDatabase)("endpoints that write refuse the wrong role", () => {
+  afterAll(signOutEveryone);
+  afterAll(cleanUpPhotos);
+
+  for (const [key, rule] of Object.entries(WRITE_ROUTES)) {
+    const handler = writeRoutes.get(key);
+    if (!handler) continue;
+    const [method, name] = key.split(" ");
+    const path = `/api/v1/${name}`;
+
+    describe(`${method} ${path}`, () => {
+      for (const persona of EVERYONE) {
+        const allowed = mayCall(rule.allowed, persona);
+        const expected = allowed ? 200 : persona === "signedOut" ? 401 : 403;
+        it(`${persona} → ${expected}`, async () => {
+          const request = new Request(new URL(path, "http://localhost:3000"), await rule.request());
+          const res = await as(persona, () => handler(request, { params: Promise.resolve({}) }));
+          expect(res.status).toBe(expected);
+          expect(res.headers.get("cache-control")).toBe("no-store");
+          const body = (await res.json()) as { data?: unknown; error?: { code: string } };
+          if (allowed) {
+            expect(body.data).toBeDefined();
+            rule.created?.(body.data);
+          } else expect(body.error?.code).toBe(persona === "signedOut" ? "signed_out" : "forbidden");
+        });
+      }
+    });
+  }
 });
