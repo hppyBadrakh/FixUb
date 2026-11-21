@@ -172,6 +172,8 @@ function CategoriesEditor({
         return t("Таны нэвтрэлт дууссан байна. Дахин нэвтэрнэ үү.", "Your session has ended. Sign in again.");
       case "forbidden":
         return t("Ангиллыг зөвхөн FixUB админ өөрчилнө.", "Only a FixUB admin can change the categories.");
+      case "rate_limited":
+        return t("Хэт олон хүсэлт илгээлээ. Түр хүлээгээд дахин оролдоно уу.", "Too many requests. Wait a little and try again.");
       case "invalid_input":
         return t(
           "Бүх ангилал, дэд ангилалд монгол, англи нэр оруулна уу. Ангилал бүр дор хаяж нэг дэд ангилалтай байна.",
