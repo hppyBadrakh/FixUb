@@ -90,3 +90,57 @@ jobs:
           grep -q "Seeded 32 reports" seed.log
       - name: Permission and rate-limit tests
         run: npm test
+
+  e2e:
+    # A real browser against `npm run dev` and a seeded database (e2e/*.spec.ts).
+    name: End-to-end
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_USER: fixub
+          POSTGRES_PASSWORD: fixub
+          POSTGRES_DB: fixub
+        ports:
+          - 54329:5432
+        options: >-
+          --health-cmd "pg_isready -U fixub -d fixub"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+      ws-proxy:
+        image: ghcr.io/neondatabase/wsproxy:latest
+        env:
+          APPEND_PORT: postgres:5432
+          ALLOW_ADDR_REGEX: .*
+          LOG_TRAFFIC: "false"
+        ports:
+          - 54330:80
+    env:
+      DATABASE_URL: postgres://fixub:fixub@localhost:54329/fixub
+      DATABASE_WS_PROXY: localhost:54330/v1
+      # Not a real secret: this database lives only for the run.
+      BETTER_AUTH_SECRET: ci-only-secret-not-used-anywhere-else-0123456789
+      BETTER_AUTH_URL: http://localhost:3000
+      DEMO_LOGIN: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run db:migrate
+      - run: npm run db:seed
+      - run: npm run e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

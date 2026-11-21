@@ -58,6 +58,7 @@ Open http://localhost:3000/login and pick a demo role (needs `DEMO_LOGIN=true`).
 | --- | --- |
 | `npm run dev` | Development server on http://localhost:3000 |
 | `npm run lint` · `npm run typecheck` · `npm run build` | Run all three before asking for review. CI runs them too |
+| `npm run e2e` | Browser tests in `e2e/` (Playwright); see "End-to-end tests" |
 | `npm test` | Server-side tests: permissions and rate limiting, against the database in `.env.local` (see [Tests](#tests)). `npm run test:watch` re-runs them as you edit |
 | `npm run preview` | Runs the built app on the real Workers runtime (reads `.dev.vars`) |
 | `npm run db:up` · `npm run db:down` | Start / stop the local Docker database |
@@ -184,6 +185,20 @@ Cloudflare account (see the comment in `wrangler.jsonc`). Until then the deploye
   `npm run db:up`, then `docker compose ps` should show `db` (healthy) and `ws-proxy`.
 - **Can't connect to Neon:** `DATABASE_WS_PROXY` must be empty, and use the *pooled* connection string.
 - **Demo login says the users are missing:** run `npm run db:seed`.
+
+### End-to-end tests
+
+`npm run e2e` drives a real browser (Playwright, Chromium) through the app in `e2e/`. The first
+time, install the browser: `npx playwright install chromium`.
+
+- It starts `npm run dev` on port 3000 itself, or uses the one you already have running. Same
+  needs as `npm test`: your database, `DEMO_LOGIN=true`, the seed.
+- `e2e/smoke.spec.ts` covers what runs on the database today (sign-in, categories, photo upload).
+- `e2e/full-loop.spec.ts` is the full loop (report → priority → assign → resolve → confirm), one
+  step per test. A step is marked `test.fixme` until its screens are converted: when you convert
+  one, write its step and remove the `fixme`.
+- CI runs it as the "End-to-end" job; a failed run keeps a trace you can open with
+  `npx playwright show-trace`.
 
 ## Deploy to Cloudflare Workers
 
