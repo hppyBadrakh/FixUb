@@ -32,7 +32,7 @@ jobs:
       - run: npm run build
 
   database:
-    name: Migrations and seed
+    name: Migrations, seed and tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
@@ -61,6 +61,10 @@ jobs:
     env:
       DATABASE_URL: postgres://fixub:fixub@localhost:54329/fixub
       DATABASE_WS_PROXY: localhost:54330/v1
+      # For `npm test`: the tests sign in as the seeded demo personas. Not a real secret.
+      BETTER_AUTH_SECRET: ci-only-secret-not-used-anywhere-else-0123456789
+      BETTER_AUTH_URL: http://localhost:3000
+      DEMO_LOGIN: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -83,3 +87,5 @@ jobs:
         run: |
           npm run db:seed | tee seed.log
           grep -q "Seeded 32 reports" seed.log
+      - name: Permission and rate-limit tests
+        run: npm test

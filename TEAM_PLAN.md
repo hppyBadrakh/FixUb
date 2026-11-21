@@ -105,7 +105,7 @@ Real app:     Screen → server action → getActor() + Zod → same rules → P
 - Every change goes through a pull request into `main`. Nobody pushes directly to `main`; A turns on branch protection on GitHub.
 - **One other person reviews.** Rotate: A reviews B, B reviews C, C reviews A. A also reviews anything touching the database, sign-in or permissions.
 - **Review within the same day.** A pull request waiting overnight blocks someone.
-- Before asking for review, run `npm run lint`, `npm run typecheck` and `npm run build` locally. CI runs them too, and a red CI can't be merged.
+- Before asking for review, run `npm run lint`, `npm run typecheck`, `npm test` and `npm run build` locally. CI runs them too, and a red CI can't be merged.
 - Merge with **"Squash and merge"**, then delete the branch.
 
 ### Database changes (the easiest place to break each other's work)
