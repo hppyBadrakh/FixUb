@@ -32,7 +32,8 @@ jobs:
       - run: npm run build
 
   database:
-    name: Migrations, seed and tests
+    # Branch protection requires this exact name; the job also runs the tests.
+    name: Migrations and seed
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
