@@ -119,8 +119,12 @@ The building blocks (all owned by A):
   throws `rate_limited` (429) over the limit: 10 reports an hour, 300 console changes an hour;
   the whole list is in that file. Screens show a "too many requests" text for `rate_limited`.
 - **Photos** (`src/server/photos.ts`, `src/lib/api/photos.ts`): see "Photos" below.
-- **`useApi<T>(path)`** (`src/lib/api/hooks.ts`): SWR. Call `mutate()` after a server action; pass
-  `{ refreshInterval: LIVE_REFRESH_MS }` on dashboards that must stay live (15 s).
+- **`useApi<T>(path)`** (`src/lib/api/hooks.ts`): SWR. Call `mutate()` after a server action.
+- **`useLiveApi<T>(path)`**: the same, re-read every 15 s while the tab is visible. Use it for
+  everything other people change (map, lists, queues, a report's timeline): it replaces the
+  demo's cross-tab sync and works across devices. `useFreshIds(data?.reports, "updatedAt")`
+  gives the ids that just changed, for the `fx-fresh` highlight (instead of `useStore().freshIds`).
+  Don't poll a form the user is editing.
 - **`useStore().server.configured`** tells a screen whether there is a database. A converted screen
   keeps its demo version for the "no database" case until week 4.
 

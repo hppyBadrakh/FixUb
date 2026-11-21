@@ -7,9 +7,19 @@
 // - `data` is the unwrapped `data` field of the response.
 // - `error` is an ApiError with the server's `code` ("signed_out", "forbidden", …).
 // - After a server action changes something, call `mutate()` to re-read it.
-// - Dashboards that must stay live pass `{ refreshInterval: LIVE_REFRESH_MS }` (15 s polling).
 // - Pass `null` as the path to skip the request (e.g. until the user is known).
+//
+// Lists and dashboards that other people change (the map, the queues, a report's timeline) use
+// `useLiveApi` instead: the same hook, re-read every 15 s. This replaces the demo's cross-tab
+// sync, and works across devices. `useFreshIds` gives the rows that just changed, for the
+// `fx-fresh` highlight the demo got from `useStore().freshIds`:
+//
+//   const { data } = useLiveApi<ReviewQueueResponse>("/api/v1/admin/reports");
+//   const fresh = useFreshIds(data?.reports, "updatedAt");
+//   <li className={fresh.has(r.id) ? "fx-fresh" : ""}>
+import { useEffect, useRef, useState } from "react";
 import useSWR, { type SWRConfiguration } from "swr";
+import { changedIds, type Stamps } from "./fresh";
 import type { ErrorCode } from "@/server/errors";
 import type { ApiEnvelope } from "./types";
 
@@ -47,4 +57,42 @@ export function useApi<T>(path: string | null, config?: SWRConfiguration<T, ApiE
     errorRetryCount: 3,
     ...config,
   });
+}
+
+/**
+ * `useApi` for data that must stay live: re-reads every 15 s while the tab is visible, and at
+ * once when the tab gets focus or the network comes back. The previous data stays on screen
+ * while a new filter or page loads, so lists don't blink.
+ */
+export function useLiveApi<T>(path: string | null, config?: SWRConfiguration<T, ApiError>) {
+  return useApi<T>(path, { refreshInterval: LIVE_REFRESH_MS, keepPreviousData: true, ...config });
+}
+
+const NONE: ReadonlySet<string> = new Set();
+/** How long a changed row stays highlighted (the `fx-fresh` animation). */
+const FRESH_MS = 1600;
+
+/**
+ * The ids of the rows that are new or changed since the previous answer of the server, for
+ * 1.6 s after it arrives. `stamp` names a field that changes whenever the row does (`updatedAt`
+ * or `version`). Nothing is fresh on the first load.
+ */
+export function useFreshIds<T extends { id: string }>(items: readonly T[] | undefined, stamp: keyof T): ReadonlySet<string> {
+  const seen = useRef<Stamps | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [fresh, setFresh] = useState(NONE);
+
+  useEffect(() => {
+    if (!items) return;
+    const next: Stamps = new Map(items.map((item) => [item.id, item[stamp]]));
+    const changed = changedIds(seen.current, next);
+    seen.current = next;
+    if (!changed.length) return;
+    setFresh(new Set(changed));
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setFresh(NONE), FRESH_MS);
+  }, [items, stamp]);
+
+  useEffect(() => () => clearTimeout(timer.current), []);
+  return fresh;
 }
