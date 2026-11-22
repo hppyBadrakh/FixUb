@@ -7,6 +7,7 @@ export const USERS = {
   admin: "u-admin",
   roadStaff: "u-road-staff",
   roadManager: "u-road-mgr",
+  lightStaff: "u-light-staff",
 } as const;
 export type DemoUser = keyof typeof USERS;
 

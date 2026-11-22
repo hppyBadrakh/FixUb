@@ -10,7 +10,6 @@ import { SegmentedControl } from "@/components/ui/form";
 import { Card } from "@/components/ui/overlay";
 import { ReportCard } from "@/components/fixub/report-parts";
 import { StatusDot } from "@/components/fixub/status";
-import { setVerdict } from "@/lib/domain/actions";
 import { isOpen, reportTitle } from "@/lib/domain/metrics";
 import { timeAgo } from "@/lib/format";
 import { useT } from "@/lib/i18n";
@@ -19,7 +18,7 @@ import { useNow, useStore } from "@/lib/store";
 import type { StatusTimelineEvent } from "@/lib/types";
 
 export function MyReports() {
-  const { ready, state, user, run, freshIds, catalog } = useStore();
+  const { ready, state, user, act, freshIds, catalog } = useStore();
   const { lang, t, pick } = useT();
   const router = useRouter();
   const toast = useToast();
@@ -117,8 +116,8 @@ export function MyReports() {
                       <Button
                         key={v}
                         icon={v === "fixed" ? CircleCheck : CircleX}
-                        onClick={() => {
-                          const res = run((s, u, n) => setVerdict(s, u, r.id, v, n));
+                        onClick={async () => {
+                          const res = await act.setVerdict(r.id, v);
                           if (res.ok)
                             toast({
                               tone: "success",

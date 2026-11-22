@@ -13,20 +13,20 @@ import { NoPhoto, Photo } from "@/components/fixub/photo";
 import { MetaRow, StatusTimeline } from "@/components/fixub/report-parts";
 import { ReportMap } from "@/components/fixub/report-map";
 import { CategoryTag, PriorityBadge, StatusBadge } from "@/components/fixub/status";
-import { assignReport, changeStatus, moderate, restoreSnapshot, setPriority, suggestedOrganization, tally, type ActionError } from "@/lib/domain/actions";
+import { suggestedOrganization, tally } from "@/lib/domain/actions";
 import { distanceM } from "@/lib/domain/geo";
 import { canWorkOn, transitionOptions } from "@/lib/domain/lifecycle";
 import { descriptionOf, placeOf, reportTitle } from "@/lib/domain/metrics";
-import { putPhoto } from "@/lib/data/photoStore";
 import { formatDateTime, timeAgo } from "@/lib/format";
 import { useT } from "@/lib/i18n";
 import { CLOSURE_LABEL, DISTRICT_META, FLAG_REASON_LABEL, PRIORITY_META, PRIORITY_ORDER, STATUS_META } from "@/lib/meta";
 import { useNow, useStore } from "@/lib/store";
+import type { ErrorCode } from "@/server/errors";
 import type { ClosureReason, Priority, ReportStatus } from "@/lib/types";
 
 export function ConsoleReport({ area }: { area: "admin" | "staff" }) {
   const { id } = useParams<{ id: string }>();
-  const { ready, state, user, run, freshIds, catalog } = useStore();
+  const { ready, state, user, act, freshIds, catalog } = useStore();
   const { lang, t, pick } = useT();
   const toast = useToast();
   const now = useNow();
@@ -96,8 +96,9 @@ export function ConsoleReport({ area }: { area: "admin" | "staff" }) {
   const reopening = report.status === "resolved" || report.status === "closed";
   const stale = seenVersion !== null && seenVersion !== report.version;
 
-  const errorText = (e: ActionError) =>
+  const errorText = (e: ErrorCode) =>
     ({
+      rate_limited: t("Хэт олон хүсэлт илгээлээ. Хэсэг хүлээгээд дахин оролдоно уу.", "Too many requests. Wait a little and try again."),
       note_required: t("Дахин нээхэд олон нийтэд харагдах тэмдэглэл заавал бичнэ.", "A public note is required to reopen a report."),
       reason_required: t("Хаах шалтгааныг сонгоно уу.", "Choose a reason for closing."),
       duplicate_required: t("Давхардсан бол үндсэн мэдээллийг сонгоно уу (нээлттэй, харагдах).", "For a duplicate, choose the original report (open and visible)."),
@@ -106,10 +107,10 @@ export function ConsoleReport({ area }: { area: "admin" | "staff" }) {
       forbidden: t("Танд энэ үйлдлийг хийх эрх алга.", "You don't have permission for this change."),
     })[e as string] ?? t("Хадгалж чадсангүй.", "Couldn't save.");
 
-  const savePriority = () => {
+  const savePriority = async () => {
     const chosen = priorityChoice ?? report.priority;
     if (!chosen) return;
-    const res = run((s, u, n) => setPriority(s, u, report.id, chosen, priorityNote, n));
+    const res = await act.setPriority(report.id, chosen, priorityNote);
     if (!res.ok) {
       toast({ tone: "danger", title: t("Хадгалж чадсангүй", "Couldn't save the priority") });
       return;
@@ -130,29 +131,22 @@ export function ConsoleReport({ area }: { area: "admin" | "staff" }) {
     }
     setSaving(true);
     setFormError(null);
-    // Status changes wait for the "server" (no optimistic update) because of the version lock.
-    setTimeout(() => {
-      const res = run((s, u, n) =>
-        changeStatus(
-          s,
-          u,
-          report.id,
-          {
-            to,
-            note,
-            closureReason: to === "closed" ? reason : undefined,
-            duplicateOfId: to === "closed" && reason === "duplicate" ? dupId : undefined,
-            photoId: to === "resolved" ? (completionPhoto ?? undefined) : undefined,
-            expectedVersion: seenVersion ?? report.version,
-          },
-          n,
-        ),
-      );
+    // Status changes wait for the server (no optimistic update) because of the version lock.
+    setTimeout(async () => {
+      const res = await act.changeStatus(report.id, {
+        to,
+        note,
+        closureReason: to === "closed" ? reason : undefined,
+        duplicateOfId: to === "closed" && reason === "duplicate" ? dupId : undefined,
+        photoId: to === "resolved" ? (completionPhoto ?? undefined) : undefined,
+        expectedVersion: seenVersion ?? report.version,
+      });
       setSaving(false);
       if (!res.ok) {
         if (res.error === "conflict") {
           setConflict(true);
-          setSeenVersion(report.version);
+          // The next save is against the version now on screen.
+          setSeenVersion(null);
         } else setFormError(errorText(res.error));
         return;
       }
@@ -161,7 +155,7 @@ export function ConsoleReport({ area }: { area: "admin" | "staff" }) {
         title: t("Төлөв шинэчлэгдлээ", "Status updated"),
         body: t(`${report.ref} одоо: ${STATUS_META[to].label.mn}.`, `${report.ref} is now ${STATUS_META[to].label.en}.`),
       });
-      setSeenVersion(report.version + 1);
+      setSeenVersion(null);
       // Only clear what was saved, in case the form was edited while saving.
       const savedNote = note;
       setTo((cur) => (cur === to ? "" : cur));
@@ -171,14 +165,14 @@ export function ConsoleReport({ area }: { area: "admin" | "staff" }) {
     }, 450);
   };
 
-  const assign = () => {
+  const assign = async () => {
     if (!orgId) return;
-    const res = run((s, u, n) => assignReport(s, u, report.id, orgId, unitId || undefined, n));
+    const res = await act.assignReport(report.id, orgId, unitId || undefined);
     if (!res.ok) {
       toast({ tone: "danger", title: t("Хуваарилж чадсангүй", "Couldn't assign") });
       return;
     }
-    setSeenVersion(report.version + 1);
+    setSeenVersion(null);
     const o = state.organizations.find((x) => x.id === orgId);
     const un = o?.units.find((x) => x.id === unitId);
     toast({
@@ -188,10 +182,12 @@ export function ConsoleReport({ area }: { area: "admin" | "staff" }) {
     });
   };
 
-  const moderateNow = (action: "hide" | "restore" | "dismiss") => {
-    const snapshot = report;
-    const res = run((s, u, n) => moderate(s, u, report.id, action, n));
-    if (!res.ok) return;
+  const moderateNow = async (action: "hide" | "restore" | "dismiss") => {
+    const res = await act.moderate(report.id, action);
+    if (!res.ok) {
+      toast({ tone: "danger", title: errorText(res.error) });
+      return;
+    }
     toast({
       tone: "success",
       title:
@@ -201,7 +197,7 @@ export function ConsoleReport({ area }: { area: "admin" | "staff" }) {
             ? t(`${report.ref}-ийг сэргээлээ`, `${report.ref} restored`)
             : t("Мэдэгдлийг хаалаа", "Flags dismissed"),
       body: t("Аудитын бүртгэлд орлоо.", "Recorded in the audit log."),
-      action: { label: t("Буцаах", "Undo"), onClick: () => run((s, u) => restoreSnapshot(s, u, snapshot)) },
+      action: { label: t("Буцаах", "Undo"), onClick: () => void res.undo() },
     });
   };
 
@@ -584,7 +580,11 @@ export function ConsoleReport({ area }: { area: "admin" | "staff" }) {
           <CameraCapture
             className="aspect-[3/4] w-full sm:aspect-[4/3]"
             onCapture={async (blob) => {
-              setCompletionPhoto(await putPhoto(blob));
+              try {
+                setCompletionPhoto(await act.savePhoto(blob));
+              } catch {
+                toast({ tone: "danger", title: t("Зургийг хадгалж чадсангүй", "Couldn't save the photo"), body: t("Дахин оролдоно уу.", "Try again.") });
+              }
               setCameraOpen(false);
             }}
           />

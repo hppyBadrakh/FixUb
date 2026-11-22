@@ -16,7 +16,16 @@ export default defineConfig({
   timeout: 60_000,
   globalTeardown: "./e2e/teardown.ts",
   use: { baseURL, trace: "retain-on-failure", screenshot: "only-on-failure" },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    {
+      name: "chromium",
+      use: {
+        ...devices["Desktop Chrome"],
+        // A fake camera that needs no permission prompt: reports are camera-only.
+        launchOptions: { args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] },
+      },
+    },
+  ],
   webServer: {
     command: "npm run dev",
     url: `${baseURL}/login`,

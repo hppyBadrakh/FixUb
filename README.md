@@ -85,12 +85,41 @@ Cloudflare dashboard. Never commit `.env.local` or `.dev.vars`.
 ## How the real app is built
 
 ```
-Demo:      Screen → useStore().run(action) → pure function → localStorage
-Real app:  Screen → server action → Zod → getActor() → same rules → Postgres (one transaction)
-           Screen ← useApi() (SWR) ← GET /api/v1/... ← Postgres
+No database:  Screen → useStore().act.x() → pure function in src/lib/domain → localStorage
+Real app:     Screen → useStore().act.x() → server action → Zod → getActor() → same rules → Postgres
+              Screen ← useStore().state ← GET /api/v1/... (SWR, every 15 s) ← Postgres
 ```
 
-Copy the reference example. Each file starts with a comment explaining the pattern:
+**Every screen reads `useStore().state` and writes through `useStore().act`**, with or without a
+database. The store ([src/lib/store.tsx](src/lib/store.tsx)) decides where the data comes from:
+
+- **Reading.** With a server, `state` is put together from `/api/v1`: the public reports, plus
+  what the signed-in user may see on top (their own reports, their organization's queue, or
+  everything for an admin), re-read every 15 seconds. The server cuts each report down to what
+  the caller may see (`src/server/queries/reports.ts`): other people are never identified, the
+  internal priority note is only for admins and assigned staff, flags only for admins.
+- **Writing.** `await act.setPriority(report.id, "high", note)` returns `{ ok: true }` or
+  `{ ok: false, error }`. With a server it calls the server action and reads the lists again;
+  without one it runs the demo's pure function ([src/lib/store-actions.ts](src/lib/store-actions.ts)).
+
+| Endpoint | Who | What |
+| --- | --- | --- |
+| `GET /api/v1/reports` | everyone | Visible reports. `?bbox=w,s,e,n`, `?status=`, `?category=`; `?mine=1` for your own (needs sign-in) |
+| `GET /api/v1/reports/{id}` | everyone | One report; a hidden one only for its reporter, admins and assigned staff |
+| `GET /api/v1/admin/reports` | admin | Every report, with flags and internal notes |
+| `GET /api/v1/staff/reports` | staff, manager | Reports assigned to their organization |
+| `GET /api/v1/organizations`, `/categories` | everyone | Organizations with units; the category tree |
+| `GET /api/v1/admin/users` | admin | Who works for which organization |
+| `POST /api/v1/photos`, `GET /api/v1/photos/{id}` | see "Photos" | Upload and show photos |
+
+| Server actions | File |
+| --- | --- |
+| `createReport`, `toggleMeToo`, `setVerdict`, `flagReport` | `src/server/actions/reports-citizen.ts` |
+| `setPriority`, `assignReport`, `changeStatus` | `src/server/actions/reports-admin.ts` |
+| `moderateReport`, `undoModeration` | `src/server/actions/moderation.ts` |
+| `saveOrganization`, `saveCategories` | `src/server/actions/organizations.ts`, `categories.ts` |
+
+To add something new, copy the reference example. Each file starts with a comment explaining the pattern:
 
 | Piece | File |
 | --- | --- |
@@ -126,8 +155,8 @@ The building blocks (all owned by A):
   demo's cross-tab sync and works across devices. `useFreshIds(data?.reports, "updatedAt")`
   gives the ids that just changed, for the `fx-fresh` highlight (instead of `useStore().freshIds`).
   Don't poll a form the user is editing.
-- **`useStore().server.configured`** tells a screen whether there is a database. A converted screen
-  keeps its demo version for the "no database" case until week 4.
+- **`useStore().server.configured`** tells a screen whether there is a database, for the few
+  places that differ (a banner text, where a photo is loaded from).
 
 **Database rules.** Only A edits `src/db/schema.ts` and creates migrations. Need a column? Ask in
 chat. Ids: reports, organizations and units are UUIDs; users are text; categories and subcategories
@@ -158,8 +187,9 @@ Photos are stored in Cloudflare R2 (the Worker binding `PHOTOS`), with one row p
 
 `npm run dev` uses a simulated bucket on your disk (`.wrangler/`), so uploads work locally with
 no Cloudflare account. **Production has no bucket yet**: R2 must first be enabled on the
-Cloudflare account (see the comment in `wrangler.jsonc`). Until then the deployed site answers
-503 `not_configured` to photo requests.
+Cloudflare account (see the comment in `wrangler.jsonc`). Until then the deployed site keeps
+photo bytes in Postgres (table `photo_blobs`), which is fine for a demo's worth of photos.
+Once the `PHOTOS` binding exists, new photos go to R2 and old ones are still read from the table.
 
 ## Tests
 
@@ -198,9 +228,9 @@ time, install the browser: `npx playwright install chromium`.
 - It starts `npm run dev` on port 3000 itself, or uses the one you already have running. Same
   needs as `npm test`: your database, `DEMO_LOGIN=true`, the seed.
 - `e2e/smoke.spec.ts` covers what runs on the database today (sign-in, categories, photo upload).
-- `e2e/full-loop.spec.ts` is the full loop (report → priority → assign → resolve → confirm), one
-  step per test. A step is marked `test.fixme` until its screens are converted: when you convert
-  one, write its step and remove the `fixme`.
+- `e2e/full-loop.spec.ts` is the full loop on three separate browsers: a citizen reports with a
+  photo, an admin sets the priority and assigns it, staff resolve it with a completion photo, and
+  the citizen sees that without reloading and confirms the fix. Chromium runs with a fake camera.
 - CI runs it as the "End-to-end" job; a failed run keeps a trace you can open with
   `npx playwright show-trace`.
 
@@ -314,7 +344,8 @@ src/components/fixub/        FixUB components (StatusBadge, ReportCard, StatusTi
 src/components/pages/        one client component per screen
 src/lib/domain/              pure rules: lifecycle, actions, metrics, geo — no React, no storage
 src/lib/data/                seed data, localStorage repository, IndexedDB photo store
-src/lib/store.tsx            React provider: state, demo session, cross-tab sync
+src/lib/store.tsx            React provider: state (from /api/v1, or demo data), session
+src/lib/store-actions.ts     useStore().act: server actions, or the demo's pure functions
 src/lib/i18n.tsx             Mongolian-first МН/EN toggle
 ```
 
@@ -328,9 +359,10 @@ five status colours with icon + word, Lucide icons).
 
 ## Known limits
 
-- Screens that aren't converted yet keep their data per browser: another device or a private window
-  starts from the seed. Only `/admin/categories` is shared through the database so far, so a
-  category edited there doesn't reach the (still demo) report form yet.
+- The store loads all reports the user may see and filters in the browser (up to 1,000, newest
+  first). The `?bbox=` viewport filter exists on the API but the map doesn't use it yet.
+- The activity feed is derived from report timelines, so "me too", flags and hiding don't appear in it.
+- Photos are stored in Postgres until R2 is enabled on the Cloudflare account (see "Photos").
 - Google sign-in needs a Google OAuth client to be configured; there is no consent screen yet.
 - Place search uses a small built-in list of Ulaanbaatar landmarks (no geocoding API).
 - District is guessed from the nearest district centre, not real boundaries.

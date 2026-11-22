@@ -1,14 +1,16 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { useApi } from "./api/hooks";
-import type { MeResponse, SessionUser } from "./api/types";
+import { useSWRConfig } from "swr";
+import { useApi, useLiveApi } from "./api/hooks";
+import type { CategoriesResponse, MeResponse, OrganizationsResponse, ReportsResponse, SessionUser, StaffResponse } from "./api/types";
 import { authClient } from "./auth-client";
 import { makeCatalog, type Catalog } from "./catalog";
 import type { ActionResult } from "./domain/actions";
 import { clearPhotos } from "./data/photoStore";
 import { createLocalRepository, type FixubRepository } from "./data/repository";
-import type { DemoState, User } from "./types";
+import { demoActions, serverActions, type StoreActions } from "./store-actions";
+import type { ActivityEvent, DemoState, Report, User } from "./types";
 
 /** What the server offers. Without a database (`configured: false`) the app is the browser-only demo. */
 export interface ServerInfo {
@@ -26,7 +28,13 @@ export type SignInResult = { ok: true } | { ok: false; message: string };
 
 interface StoreValue {
   ready: boolean;
+  /**
+   * What the screens show. With a server it is put together from `/api/v1` (what this user may
+   * see, re-read every 15 s); without one it is the demo data in this browser.
+   */
   state: DemoState;
+  /** Everything a screen can change: `await act.setPriority(…)`. See src/lib/store-actions.ts. */
+  act: StoreActions;
   /**
    * The signed-in user. With a server it is the server's session (Google or demo login);
    * without one it is the demo persona chosen in this browser.
@@ -38,7 +46,7 @@ interface StoreValue {
   /** Start Google sign-in; the browser leaves the page. `next` is where to land afterwards. */
   signInWithGoogle: (next?: string) => Promise<SignInResult>;
   signOut: () => Promise<void>;
-  /** Apply a pure action with the current user; saves and returns its result. */
+  /** Browser-only demo: apply a pure action to the local state. Screens use `act` instead. */
   run: <T>(action: (s: DemoState, user: User | null, now: number) => ActionResult<T>) => ActionResult<T>;
   reset: () => Promise<void>;
   /** Reports changed in the last ~1.6 s (here or in another tab) — for the highlight wash. */
@@ -76,6 +84,26 @@ const NO_SERVER: ServerInfo = { configured: false, google: false, demoLogin: fal
  */
 function toDemoUser(u: SessionUser): User {
   return { id: u.id, name: u.name, role: u.role, organizationId: u.organizationSlug ?? undefined, unitId: u.unitSlug ?? undefined };
+}
+
+/**
+ * The activity feed, read off the reports' timelines: created, assigned, status changes and
+ * priority decisions, newest first.
+ */
+function activityFrom(reports: Report[]): ActivityEvent[] {
+  const out: ActivityEvent[] = [];
+  for (const r of reports) {
+    for (const e of r.timeline) {
+      const base = { id: `${r.id}:${e.id}`, at: e.at, reportId: r.id, actorLabel: e.actorLabel };
+      if (e.type === "assigned") out.push({ ...base, type: "assigned", organizationId: e.organizationId });
+      else if (e.from === null) out.push({ ...base, type: "created", actorLabel: undefined });
+      else out.push({ ...base, type: "status", to: e.to, reason: e.reason });
+    }
+    if (r.priority && r.priorityDecision) {
+      out.push({ id: `${r.id}:priority`, at: r.priorityDecision.at, reportId: r.id, type: "prioritized", priority: r.priority, actorLabel: { mn: "FixUB баг", en: "FixUB team" } });
+    }
+  }
+  return out.sort((a, b) => b.at - a.at).slice(0, 400);
 }
 
 function changedIds(prev: DemoState, next: DemoState): string[] {
@@ -158,8 +186,65 @@ export function FixubProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     userRef.current = user;
   }, [user]);
-  // Wait for the server's answer before rendering: otherwise consoles flash "sign in" on every load.
-  const ready = localReady && !me.isLoading;
+
+  /* ---- With a server: the lists come from /api/v1 and are re-read every 15 s ---- */
+  const on = server.configured;
+  const role = on ? user?.role : undefined;
+  const isStaff = role === "org_staff" || role === "org_manager";
+  const publicReports = useLiveApi<ReportsResponse>(on ? "/api/v1/reports" : null);
+  const myReports = useLiveApi<ReportsResponse>(role ? "/api/v1/reports?mine=1" : null);
+  const staffReports = useLiveApi<ReportsResponse>(isStaff ? "/api/v1/staff/reports" : null);
+  const adminReports = useLiveApi<ReportsResponse>(role === "admin" ? "/api/v1/admin/reports" : null);
+  const organizations = useLiveApi<OrganizationsResponse>(on ? "/api/v1/organizations" : null);
+  // Not polled: the categories editor reads the same data and must not change under the admin's hands.
+  const categories = useApi<CategoriesResponse>(on ? "/api/v1/categories" : null);
+  const staff = useApi<StaffResponse>(role === "admin" ? "/api/v1/admin/users" : null);
+
+  const serverState = useMemo<DemoState>(() => {
+    // Each list is what its endpoint lets this user see. A later list knows more about a report
+    // (the reporter's own, the assigned staff's, the admin's), so it replaces the earlier entry.
+    const byId = new Map<string, Report>();
+    for (const list of [publicReports.data, myReports.data, staffReports.data, adminReports.data]) {
+      for (const r of list?.reports ?? []) byId.set(r.id, r);
+    }
+    const reports = [...byId.values()].sort((a, b) => b.createdAt - a.createdAt);
+    // The demo personas (for the role picker) plus, for admins, who works where.
+    const users = new Map([...state.users, ...(staff.data?.users ?? [])].map((u) => [u.id, u]));
+    return {
+      schema: 2,
+      seededAt: 0,
+      seq: 0,
+      reports,
+      organizations: organizations.data?.organizations ?? [],
+      categories: categories.data?.categories ?? [],
+      users: [...users.values()],
+      activity: activityFrom(reports),
+    };
+  }, [publicReports.data, myReports.data, staffReports.data, adminReports.data, organizations.data, categories.data, staff.data, state.users]);
+  const shown = on ? serverState : state;
+
+  // Rows that changed since the last answer of the server get the same highlight as in the demo.
+  const lastShown = useRef<DemoState | null>(null);
+  useEffect(() => {
+    if (!on) return;
+    const prev = lastShown.current;
+    lastShown.current = serverState;
+    if (prev) flash(changedIds(prev, serverState));
+  }, [on, serverState, flash]);
+
+  // Wait for the server's answers before rendering: otherwise consoles flash "sign in", or an
+  // empty list, on every load.
+  const answered = (list: { data?: unknown; error?: unknown }, needed = true) => !needed || list.data !== undefined || list.error !== undefined;
+  const ready =
+    localReady &&
+    !me.isLoading &&
+    (!on ||
+      (answered(publicReports) &&
+        answered(organizations) &&
+        answered(categories) &&
+        answered(myReports, !!role) &&
+        answered(staffReports, isStaff) &&
+        answered(adminReports, role === "admin")));
 
   const run = useCallback(
     <T,>(action: (s: DemoState, user: User | null, now: number) => ActionResult<T>) => {
@@ -177,7 +262,12 @@ export function FixubProvider({ children }: { children: React.ReactNode }) {
     [flash],
   );
 
-  const refreshSession = me.mutate;
+  // Reads everything from the server again: after a write, and when the signed-in user changes.
+  const { mutate: mutateCache } = useSWRConfig();
+  const refresh = useCallback(() => mutateCache((key) => typeof key === "string" && key.startsWith("/api/v1/")), [mutateCache]);
+  const refreshSession = refresh;
+  // eslint-disable-next-line react-hooks/refs -- `run` reads its refs when an action is called (an event handler), never during render
+  const act = useMemo(() => (on ? serverActions(refresh) : demoActions(run)), [on, refresh, run]);
   const signIn = useCallback(
     async (id: string): Promise<SignInResult> => {
       if (server.configured) {
@@ -214,13 +304,14 @@ export function FixubProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const catalog = useMemo(() => makeCatalog(state.categories), [state.categories]);
+  const catalog = useMemo(() => makeCatalog(shown.categories), [shown.categories]);
 
   const value = useMemo<StoreValue>(
     () => ({
       catalog,
       ready,
-      state,
+      state: shown,
+      act,
       user,
       server,
       signIn,
@@ -230,7 +321,7 @@ export function FixubProvider({ children }: { children: React.ReactNode }) {
       reset,
       freshIds,
     }),
-    [ready, state, user, server, signIn, signInWithGoogle, signOut, run, reset, freshIds, catalog],
+    [ready, shown, act, user, server, signIn, signInWithGoogle, signOut, run, reset, freshIds, catalog],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
