@@ -37,7 +37,7 @@ export const ANONYMOUS = "";
 const FIXUB_TEAM: Bi = { mn: "FixUB баг", en: "FixUB team" };
 const SYSTEM: Bi = { mn: "Систем", en: "System" };
 
-/** The newest reports first; lists are capped so one request can't read the whole table forever. */
+/** Lists are capped so one request can't read the whole table forever. Newest first unless asked otherwise. */
 const MAX_REPORTS = 1000;
 
 export const whereVisible = eq(reports.visibility, "visible");
@@ -56,7 +56,12 @@ export function whereCategory(slug: string): SQL {
  * `viewer` may see them. `where` decides WHICH reports (the caller's permission rule); this
  * function decides how much of each one is shown.
  */
-export async function loadReports(db: Db | Tx, viewer: Actor | null, where: SQL | undefined): Promise<Report[]> {
+export async function loadReports(
+  db: Db | Tx,
+  viewer: Actor | null,
+  where: SQL | undefined,
+  { orderBy = [desc(reports.createdAt), desc(reports.id)], limit = MAX_REPORTS }: { orderBy?: SQL[]; limit?: number } = {},
+): Promise<Report[]> {
   const rows = await db
     .select({
       id: reports.id,
@@ -92,8 +97,8 @@ export async function loadReports(db: Db | Tx, viewer: Actor | null, where: SQL 
     .innerJoin(subcategories, eq(subcategories.id, reports.subcategoryId))
     .leftJoin(users, eq(users.id, reports.prioritySetBy))
     .where(where)
-    .orderBy(desc(reports.createdAt), desc(reports.id))
-    .limit(MAX_REPORTS);
+    .orderBy(...orderBy)
+    .limit(Math.min(limit, MAX_REPORTS));
   if (rows.length === 0) return [];
 
   const ids = rows.map((r) => r.id);
