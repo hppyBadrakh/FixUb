@@ -106,8 +106,8 @@ database. The store ([src/lib/store.tsx](src/lib/store.tsx)) decides where the d
 | --- | --- | --- |
 | `GET /api/v1/reports` | everyone | Visible reports. `?bbox=w,s,e,n`, `?status=`, `?category=`; `?mine=1` for your own (needs sign-in) |
 | `GET /api/v1/reports/{id}` | everyone | One report; a hidden one only for its reporter, admins and assigned staff |
-| `GET /api/v1/admin/reports` | admin | Every report, with flags and internal notes |
-| `GET /api/v1/staff/reports` | staff, manager | Reports assigned to their organization |
+| `GET /api/v1/admin/reports` | admin | Every report, with flags and internal notes. `?status=`, `?priority=` (incl. `pending`), `?category=`, `?organizationId=org-road\|none`, `?sort=priority\|oldest\|newest`, `?limit=` |
+| `GET /api/v1/staff/reports` | staff, manager | Reports assigned to their organization; same filters |
 | `GET /api/v1/organizations`, `/categories` | everyone | Organizations with units; the category tree |
 | `GET /api/v1/admin/users` | admin | Who works for which organization |
 | `POST /api/v1/photos`, `GET /api/v1/photos/{id}` | see "Photos" | Upload and show photos |
