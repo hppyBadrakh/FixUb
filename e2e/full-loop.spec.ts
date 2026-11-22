@@ -26,7 +26,7 @@ async function takePhoto(page: Page) {
 const DESCRIPTION = `E2E: a pothole about a metre wide, cars swerve around it (${Date.now().toString(36)}).`;
 
 test.describe.serial("full loop: report → priority → assign → resolve → confirm", () => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   let citizen: Page;
   let ref: string;
   let id: string;
@@ -114,7 +114,7 @@ test.describe.serial("full loop: report → priority → assign → resolve → 
 
   test("the citizen sees it resolved without reloading, and confirms it is fixed", async () => {
     // The page has been open since the first step: the change arrives by polling (15 s).
-    await expect(citizen.getByText("The pothole has been filled.")).toBeVisible({ timeout: 30_000 });
+    await expect(citizen.getByText("The pothole has been filled.")).toBeVisible({ timeout: 45_000 });
     await expect(citizen.getByText("Road Maintenance (demo)").first()).toBeVisible();
     await expect(citizen.getByText("Near a school")).toHaveCount(0);
 

@@ -13,7 +13,10 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
-  timeout: 60_000,
+  timeout: 120_000,
+  // `next dev` compiles a page or a server action the first time it is used, which takes a
+  // while on a cold CI machine: give every expectation room for that.
+  expect: { timeout: 30_000 },
   globalTeardown: "./e2e/teardown.ts",
   use: { baseURL, trace: "retain-on-failure", screenshot: "only-on-failure" },
   projects: [
