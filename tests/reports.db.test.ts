@@ -207,3 +207,48 @@ describe.skipIf(!hasDatabase)("flags and moderation", () => {
     expect((await find("admin", adminReports, id))!.flags.map((f) => f.status)).toEqual(["open", "open", "open"]);
   });
 });
+
+describe.skipIf(!hasDatabase)("queue filters and sorting", () => {
+  afterAll(cleanUpReports);
+  afterAll(signOutEveryone);
+
+  it("filters the admin queue by priority, organization and status", async () => {
+    const pending = await makeReport();
+    const assigned = await makeReport({ org: "org-road", status: "in_progress" });
+
+    const waiting = await read("admin", adminReports, "?priority=pending&organizationId=none");
+    expect(waiting.some((r) => r.id === pending)).toBe(true);
+    expect(waiting.some((r) => r.id === assigned)).toBe(false);
+    expect(waiting.every((r) => r.priority === null && !r.organizationId)).toBe(true);
+
+    const road = await read("admin", adminReports, "?organizationId=org-road&status=in_progress");
+    expect(road.some((r) => r.id === assigned)).toBe(true);
+    expect(road.every((r) => r.organizationId === "org-road" && r.status === "in_progress")).toBe(true);
+
+    expect(await read("admin", adminReports, "?category=roads&limit=2")).toHaveLength(2);
+  });
+
+  it("sorts by priority by default: critical first, pending review last, oldest first within one", async () => {
+    const urgent = await makeReport();
+    ok(await as("admin", () => setPriority({ reportId: urgent, priority: "critical", note: "" })));
+    const pending = await makeReport();
+
+    const queue = await read("admin", adminReports);
+    const rank = { critical: 0, high: 1, medium: 2, low: 3 } as const;
+    const ranks = queue.map((r) => (r.priority ? rank[r.priority] : 4));
+    expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
+    expect(queue.findIndex((r) => r.id === urgent)).toBeLessThan(queue.findIndex((r) => r.id === pending));
+
+    const newest = await read("admin", adminReports, "?sort=newest");
+    expect(newest[0].createdAt).toBeGreaterThanOrEqual(newest.at(-1)!.createdAt);
+  });
+
+  it("a staff queue stays inside its own organization, whatever the filter says", async () => {
+    const theirs = await makeReport({ org: "org-light" });
+    const ours = await makeReport({ org: "org-road" });
+    const queue = await read("roadStaff", staffReports, "?organizationId=org-light");
+    expect(queue.some((r) => r.id === ours)).toBe(true);
+    expect(queue.some((r) => r.id === theirs)).toBe(false);
+    expect(queue.every((r) => r.organizationId === "org-road")).toBe(true);
+  });
+});

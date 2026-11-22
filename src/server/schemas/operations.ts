@@ -176,3 +176,27 @@ export const organizationInputSchema = z
     }
   });
 export type OrganizationInput = z.infer<typeof organizationInputSchema>;
+
+/* ------------------------------------------------------------------ */
+/* Queue filters (query string of the review and staff queue APIs)    */
+/* ------------------------------------------------------------------ */
+
+export const QUEUE_SORTS = ["priority", "oldest", "newest"] as const;
+export const PRIORITY_FILTERS = [...PRIORITIES, "pending"] as const;
+
+const csv = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
+
+/** The most reports one request returns. */
+export const QUEUE_LIMIT_MAX = 1000;
+
+export const queueFiltersSchema = z.object({
+  status: z.string().transform(csv).pipe(z.array(z.enum(REPORT_STATUSES)).max(5)).optional(),
+  /** "pending" = no priority yet. */
+  priority: z.string().transform(csv).pipe(z.array(z.enum(PRIORITY_FILTERS)).max(5)).optional(),
+  category: categorySlug.optional(),
+  /** Organization slug ("org-road"), or "none" for reports nobody is assigned to. */
+  organizationId: z.union([z.literal("none"), orgSlug]).optional(),
+  sort: z.enum(QUEUE_SORTS).default("priority"),
+  limit: z.coerce.number().int().min(1).max(QUEUE_LIMIT_MAX).default(QUEUE_LIMIT_MAX),
+});
+export type QueueFilters = z.infer<typeof queueFiltersSchema>;
