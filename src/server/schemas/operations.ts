@@ -30,9 +30,7 @@ export const _closureReasonsMatch: [ClosureReason] extends [(typeof CLOSURE_REAS
 
 /** Error codes returned as field messages. The UI maps them to Mongolian/English text. */
 export const OPS_ERROR_CODES = {
-  reasonRequired: "reason_required",
   reasonNotAllowed: "reason_not_allowed",
-  duplicateRequired: "duplicate_required",
   duplicateNotAllowed: "duplicate_not_allowed",
   duplicateSlug: "duplicate_slug",
 } as const;
@@ -53,6 +51,10 @@ function hasDuplicates(values: string[]): boolean {
 /**
  * Changes a report's status. `version` is the report version the client read: the action rejects
  * with 409 when someone else changed the report in the meantime (optimistic lock).
+ *
+ * A missing closure reason or duplicate target is NOT refused here: `checkTransition` in the
+ * action answers `reason_required` / `duplicate_required`, which the screens show next to the
+ * right field. The schema only refuses values that make no sense for the move.
  */
 export const changeStatusSchema = z
   .object({
@@ -63,16 +65,12 @@ export const changeStatusSchema = z
     note: z.string().trim().max(NOTE_MAX).default(""),
     closureReason: z.enum(CLOSURE_REASONS).optional(),
     duplicateOfId: idSchema.optional(),
+    /** Completion photo (an id from `uploadPhoto`), only when resolving. */
+    photoId: idSchema.optional(),
   })
   .superRefine((v, ctx) => {
-    if (v.to === "closed" && !v.closureReason) {
-      ctx.addIssue({ code: "custom", path: ["closureReason"], message: OPS_ERROR_CODES.reasonRequired });
-    }
     if (v.to !== "closed" && v.closureReason) {
       ctx.addIssue({ code: "custom", path: ["closureReason"], message: OPS_ERROR_CODES.reasonNotAllowed });
-    }
-    if (v.closureReason === "duplicate" && !v.duplicateOfId) {
-      ctx.addIssue({ code: "custom", path: ["duplicateOfId"], message: OPS_ERROR_CODES.duplicateRequired });
     }
     if (v.closureReason !== "duplicate" && v.duplicateOfId) {
       ctx.addIssue({ code: "custom", path: ["duplicateOfId"], message: OPS_ERROR_CODES.duplicateNotAllowed });

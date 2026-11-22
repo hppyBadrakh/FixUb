@@ -2,13 +2,14 @@ import "server-only";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { and, eq, isNull } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
-import { reportImages, reports } from "@/db/schema";
+import { photoBlobs, reportImages, reports } from "@/db/schema";
 import type { UploadedPhoto } from "@/lib/api/types";
 import { LIMITS } from "@/lib/meta";
 import { AppError } from "./errors";
 
 // Photos: the bytes live in Cloudflare R2 (binding `PHOTOS`), one row per photo in
-// `report_images`.
+// `report_images`. A deployment without the binding keeps the bytes in Postgres instead
+// (`photo_blobs`), so photos work everywhere; R2 takes over as soon as the binding exists.
 //
 // A photo is uploaded before the thing it belongs to exists:
 //
@@ -28,19 +29,40 @@ export interface PhotoBucket {
   delete(key: string): Promise<void>;
 }
 
-/** The R2 bucket. Throws `not_configured` (503) where the Worker has no `PHOTOS` binding. */
-export async function photoBucket(): Promise<PhotoBucket> {
-  let bucket: PhotoBucket | undefined;
+/** The same three operations on the `photo_blobs` table. */
+function databaseBucket(db: Db | Tx): PhotoBucket {
+  return {
+    async put(key, value) {
+      await db.insert(photoBlobs).values({ storageKey: key, bytes: value }).onConflictDoNothing();
+    },
+    async get(key) {
+      const [row] = await db.select({ bytes: photoBlobs.bytes }).from(photoBlobs).where(eq(photoBlobs.storageKey, key));
+      if (!row) return null;
+      const bytes = new Uint8Array(row.bytes); // a copy: its buffer holds exactly the photo
+      return { arrayBuffer: async () => bytes.buffer };
+    },
+    async delete(key) {
+      await db.delete(photoBlobs).where(eq(photoBlobs.storageKey, key));
+    },
+  };
+}
+
+/** Where photo bytes go: the R2 bucket if this Worker has the `PHOTOS` binding, else Postgres. */
+export async function photoBucket(db: Db | Tx): Promise<PhotoBucket> {
   try {
     const { env } = await getCloudflareContext({ async: true });
-    bucket = (env as unknown as { PHOTOS?: PhotoBucket }).PHOTOS;
+    const bucket = (env as unknown as { PHOTOS?: PhotoBucket }).PHOTOS;
+    if (bucket) return bucket;
   } catch {
-    // Not running on Workers and no local simulation: handled below.
+    // Not running on Workers and no local simulation.
   }
-  if (!bucket) {
-    throw new AppError("not_configured", "Photo storage (the R2 binding PHOTOS) is not set up on this server.");
-  }
-  return bucket;
+  return databaseBucket(db);
+}
+
+/** A photo is read from where it was written: R2 first, then the table. */
+async function readPhoto(db: Db | Tx, key: string) {
+  const bucket = await photoBucket(db);
+  return (await bucket.get(key)) ?? (await databaseBucket(db).get(key));
 }
 
 /**
@@ -90,7 +112,7 @@ export async function storePhoto(db: Db | Tx, actor: { id: string }, bytes: Uint
   const size = readJpegSize(bytes);
   if (!size) throw new AppError("invalid_input", "The file is not a JPEG photo.");
 
-  const bucket = await photoBucket();
+  const bucket = await photoBucket(db);
   const id = crypto.randomUUID();
   await bucket.put(storageKey(id), bytes, { httpMetadata: { contentType: "image/jpeg" } });
   try {
@@ -190,7 +212,7 @@ export async function loadPhoto(
   const isInsider = !!actor && (actor.role === "admin" || actor.id === photo.uploadedBy);
   if (!isPublic && !isInsider) throw new AppError("not_found");
 
-  const object = await (await photoBucket()).get(photo.storageKey);
+  const object = await readPhoto(db, photo.storageKey);
   if (!object) throw new AppError("not_found");
   return { bytes: await object.arrayBuffer(), contentType: photo.contentType };
 }
