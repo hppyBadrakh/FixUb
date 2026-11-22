@@ -176,7 +176,10 @@ export const ROUTES: Record<string, RouteRule> = {
       { name: "an id that isn't one", as: "admin", url: () => "/api/v1/reports/nope", params: () => ({ id: "nope" }), status: 404 },
     ],
   },
-  "admin/reports": { allowed: ["admin"] },
+  "admin/reports": {
+    allowed: ["admin"],
+    refusals: [{ name: "a filter that isn't one", as: "admin", url: () => "/api/v1/admin/reports?sort=sideways", status: 400 }],
+  },
   "admin/users": { allowed: ["admin"] },
   "staff/reports": { allowed: ["org_staff", "org_manager"] },
   "photos/[id]": {

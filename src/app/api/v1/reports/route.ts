@@ -13,7 +13,7 @@ import type { ReportsResponse } from "@/lib/api/types";
 import { getActor, requireActor } from "@/server/actor";
 import { api } from "@/server/api";
 import { withDb } from "@/server/db";
-import { AppError } from "@/server/errors";
+import { parseSearchParams } from "@/server/parse";
 import { loadReports, whereCategory, whereInBox, whereReportedBy, whereVisible } from "@/server/queries/reports";
 import { REPORT_STATUSES } from "@/server/schemas";
 
@@ -44,9 +44,7 @@ const querySchema = z.object({
 export async function GET(request: Request) {
   return api<ReportsResponse>(() =>
     withDb(async (db) => {
-      const parsed = querySchema.safeParse(Object.fromEntries(new URL(request.url).searchParams));
-      if (!parsed.success) throw new AppError("invalid_input", "The filters in the address are not valid.");
-      const q = parsed.data;
+      const q = parseSearchParams(querySchema, request);
       const actor = await getActor(db);
 
       const filters: (SQL | undefined)[] = [q.mine ? whereReportedBy(requireActor(actor).id) : whereVisible];

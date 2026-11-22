@@ -91,9 +91,11 @@ export async function changeStatus(input: unknown) {
       // Staff of another organization get `not_found`: they must not learn the report exists.
       requireOrgMember(actor, report.organizationId);
 
+      // The version comes before the lifecycle rules: after someone else's change the move the
+      // user chose may no longer exist, and "someone else updated this" is the true answer.
+      if (report.version !== input.version) throw new AppError("conflict");
       const problem = checkTransition(actor, { status: report.status, organizationId: report.organizationId ?? undefined }, input.to, input);
       if (problem) throw new AppError(problem);
-      if (report.version !== input.version) throw new AppError("conflict");
       if (input.photoId && input.to !== "resolved") {
         throw new AppError("invalid_input", "A completion photo can only be added when resolving a report.");
       }
