@@ -1,6 +1,6 @@
 // Shapes of the `/api/v1` responses, shared by the route handlers and the screens.
 // Types only: safe to import from client and server code.
-import type { CategoryDef, Role, SubcategoryDef } from "@/lib/types";
+import type { CategoryDef, Organization, Report, Role, SubcategoryDef, User } from "@/lib/types";
 import type { ErrorBody } from "@/server/errors";
 
 /** Every `/api/v1` response is `{ data }` on success or `{ error }` on failure. */
@@ -55,4 +55,32 @@ export interface UploadedPhoto {
   width: number;
   height: number;
   bytes: number;
+}
+
+/* ---- GET /api/v1/reports, /api/v1/admin/reports, /api/v1/staff/reports ---- */
+
+/**
+ * Reports in the demo's `Report` shape, already cut down to what the caller may see: other
+ * people's ids are replaced by "" (see src/server/queries/reports.ts).
+ */
+export interface ReportsResponse {
+  reports: Report[];
+}
+
+/* ---- GET /api/v1/reports/{id} ---- */
+
+export interface ReportResponse {
+  report: Report;
+}
+
+/* ---- GET /api/v1/organizations ---- */
+
+export interface OrganizationsResponse {
+  organizations: Organization[];
+}
+
+/* ---- GET /api/v1/admin/users ---- */
+
+export interface StaffResponse {
+  users: User[];
 }

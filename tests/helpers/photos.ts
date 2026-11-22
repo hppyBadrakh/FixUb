@@ -1,9 +1,12 @@
 // Photo fixtures: an in-memory stand-in for the R2 bucket, JPEG bytes, and photos in known states.
 import { and, eq, inArray, like, notExists, sql } from "drizzle-orm";
-import { rateLimitBuckets, reportImages, reports } from "@/db/schema";
+import { photoBlobs, rateLimitBuckets, reportImages, reports } from "@/db/schema";
 import { withDb } from "@/server/db";
 import { attachReportPhotos, storePhoto, type PhotoBucket } from "@/server/photos";
 import { PERSONAS, type Persona } from "./personas";
+
+/** Set `bound` to false to test a deployment without the R2 binding (photos then go to Postgres). */
+export const r2 = { bound: true };
 
 /** What the server code gets as `env.PHOTOS` in tests (see tests/setup.ts). */
 export const bucketObjects = new Map<string, Uint8Array>();
@@ -72,7 +75,10 @@ export async function cleanUpPhotos(): Promise<void> {
   publicPhotoId = undefined;
   bucketObjects.clear();
   await withDb(async (db) => {
-    if (created.size) await db.delete(reportImages).where(inArray(reportImages.id, [...created]));
+    if (created.size) {
+      await db.delete(reportImages).where(inArray(reportImages.id, [...created]));
+      await db.delete(photoBlobs).where(inArray(photoBlobs.storageKey, [...created].map((id) => `photos/${id}.jpg`)));
+    }
     await db.delete(rateLimitBuckets).where(like(rateLimitBuckets.key, "photo.upload:user:u-%"));
   });
   created.clear();

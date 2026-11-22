@@ -5,6 +5,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import type { ActionResult } from "@/server/action";
 import { as, EVERYONE, hasDatabase, ROLE_PERSONA, signOutEveryone, type Persona } from "./helpers/personas";
 import { cleanUpPhotos } from "./helpers/photos";
+import { cleanUpReports } from "./helpers/reports";
 import { ACTIONS, ROUTES, WRITE_ROUTES, type RouteRule } from "./permission-matrix";
 
 type Action = (input: unknown) => Promise<ActionResult>;
@@ -66,6 +67,8 @@ describe("the permission matrix is complete", () => {
 
 describe.skipIf(!hasDatabase)("server actions refuse the wrong role", () => {
   afterAll(signOutEveryone);
+  afterAll(cleanUpPhotos);
+  afterAll(cleanUpReports);
 
   for (const [key, rule] of Object.entries(ACTIONS)) {
     const run = actions.get(key);
@@ -76,16 +79,18 @@ describe.skipIf(!hasDatabase)("server actions refuse the wrong role", () => {
         const allowed = mayCall(rule.allowed, persona);
         const expected = allowed ? "allowed" : persona === "signedOut" ? "signed_out" : "forbidden";
         it(`${persona} → ${expected}`, async () => {
-          const input = await rule.input();
+          const input = await rule.input(persona);
           const result = await as(persona, () => run(input));
-          if (allowed) expect(result, JSON.stringify(result)).toMatchObject({ ok: true });
-          else expect(result).toMatchObject({ ok: false, error: expected });
+          if (allowed) {
+            expect(result, JSON.stringify(result)).toMatchObject({ ok: true });
+            rule.created?.(result);
+          } else expect(result).toMatchObject({ ok: false, error: expected });
         });
       }
 
       for (const refusal of rule.refusals ?? []) {
         it(`${refusal.as}, ${refusal.name} → ${refusal.error}`, async () => {
-          const input = await refusal.input();
+          const input = await refusal.input(refusal.as);
           const result = await as(refusal.as, () => run(input));
           expect(result).toMatchObject({ ok: false, error: refusal.error });
         });
@@ -97,6 +102,7 @@ describe.skipIf(!hasDatabase)("server actions refuse the wrong role", () => {
 describe.skipIf(!hasDatabase)("GET endpoints refuse the wrong role", () => {
   afterAll(signOutEveryone);
   afterAll(cleanUpPhotos);
+  afterAll(cleanUpReports);
 
   for (const [key, rule] of Object.entries(ROUTES)) {
     const handler = routes.get(key);

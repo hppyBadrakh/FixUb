@@ -16,6 +16,6 @@ vi.mock("next/headers", () => ({ headers: async () => requestHeaders() }));
 
 // The R2 bucket binding: an in-memory stand-in, so photo tests need no Cloudflare account.
 vi.mock("@opennextjs/cloudflare", async () => {
-  const { fakeBucket } = await import("./helpers/photos");
-  return { getCloudflareContext: async () => ({ env: { PHOTOS: fakeBucket } }) };
+  const { fakeBucket, r2 } = await import("./helpers/photos");
+  return { getCloudflareContext: async () => ({ env: r2.bound ? { PHOTOS: fakeBucket } : {} }) };
 });

@@ -14,6 +14,7 @@ import {
   bigint,
   boolean,
   check,
+  customType,
   foreignKey,
   geometry,
   index,
@@ -429,6 +430,18 @@ export const reportImages = pgTable(
     check("report_images_position_check", sql`${t.position} BETWEEN 0 AND 2`),
   ],
 );
+
+const bytea = customType<{ data: Uint8Array; driverData: Uint8Array }>({ dataType: () => "bytea" });
+
+/**
+ * Photo bytes for a deployment that has no R2 bucket (src/server/photos.ts falls back to this
+ * table). Keyed like an R2 object, so the rest of the code can't tell the two stores apart.
+ */
+export const photoBlobs = pgTable("photo_blobs", {
+  storageKey: text("storage_key").primaryKey(),
+  bytes: bytea("bytes").notNull(),
+  createdAt: createdAt(),
+});
 
 /** One "me too" per user per report. */
 export const reportConfirmations = pgTable(

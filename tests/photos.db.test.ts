@@ -9,7 +9,7 @@ import { withDb } from "@/server/db";
 import { AppError } from "@/server/errors";
 import { attachReportPhotos, PHOTO_MAX_BYTES, readJpegSize } from "@/server/photos";
 import { as, hasDatabase, PERSONAS, signOutEveryone, type Persona } from "./helpers/personas";
-import { bucketObjects, cleanUpPhotos, jpeg, publicPhoto, rememberPhoto, uploadedBy } from "./helpers/photos";
+import { bucketObjects, cleanUpPhotos, jpeg, publicPhoto, r2, rememberPhoto, uploadedBy } from "./helpers/photos";
 
 describe("readJpegSize", () => {
   it("reads the size from a JPEG's frame header", () => {
@@ -64,6 +64,25 @@ describe.skipIf(!hasDatabase)("photo upload", () => {
     expect(served.headers.get("content-type")).toBe("image/jpeg");
     expect(served.headers.get("x-content-type-options")).toBe("nosniff");
     expect(new Uint8Array(await served.arrayBuffer())).toEqual(bytes);
+  });
+
+  it("without an R2 bucket, keeps the photo in the database and serves it just the same", async () => {
+    r2.bound = false;
+    try {
+      const bytes = jpeg(800, 600, 20_000);
+      const before = bucketObjects.size;
+      const res = await post("citizen", bytes);
+      expect(res.status).toBe(200);
+      expect(bucketObjects.size).toBe(before);
+      const served = await get("citizen", res.data!.id);
+      expect(served.status).toBe(200);
+      expect(new Uint8Array(await served.arrayBuffer())).toEqual(bytes);
+      // Still readable after the bucket appears: a photo is read from where it was written.
+      r2.bound = true;
+      expect((await get("citizen", res.data!.id)).status).toBe(200);
+    } finally {
+      r2.bound = true;
+    }
   });
 
   it("refuses a file that isn't a JPEG, even when it says it is", async () => {
