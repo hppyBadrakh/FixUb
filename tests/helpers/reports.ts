@@ -20,20 +20,27 @@ export interface FixtureOptions {
   /** Slug of the organization it is assigned to, e.g. "org-road". */
   org?: string;
   hidden?: boolean;
+  /** Where it is. Default: PLACE. */
+  at?: { lng: number; lat: number };
+  /** How many days ago it was reported. Default: just now. */
+  ageDays?: number;
+  /** Slug of its category and subcategory. Default: roads / pothole. */
+  category?: [category: string, subcategory: string];
 }
 
 /** Inserts a report directly (no action involved) and returns its id. */
-export async function makeReport({ reporter = "otherCitizen", status = "reported", org, hidden = false }: FixtureOptions = {}): Promise<string> {
+export async function makeReport({ reporter = "otherCitizen", status = "reported", org, hidden = false, at = PLACE, ageDays = 0, category: [categorySlug, subcategorySlug] = ["roads", "pothole"] }: FixtureOptions = {}): Promise<string> {
   const id = await withDb(async (db) => {
     const [sub] = await db
       .select({ id: subcategories.id, categoryId: subcategories.categoryId })
       .from(subcategories)
       .innerJoin(categories, eq(categories.id, subcategories.categoryId))
-      .where(and(eq(categories.slug, "roads"), eq(subcategories.slug, "pothole")));
+      .where(and(eq(categories.slug, categorySlug), eq(subcategories.slug, subcategorySlug)));
     const [organization] = org ? await db.select({ id: organizations.id }).from(organizations).where(eq(organizations.slug, org)) : [];
     if (!sub || (org && !organization)) throw new Error("The seed data is missing. Run npm run db:seed.");
 
     const now = new Date();
+    const created = new Date(now.getTime() - ageDays * 864e5);
     const [report] = await db
       .insert(reports)
       .values({
@@ -43,7 +50,8 @@ export async function makeReport({ reporter = "otherCitizen", status = "reported
         categoryId: sub.categoryId,
         subcategoryId: sub.id,
         description: "Тестийн мэдээлэл: замд том нүх гарсан байна.",
-        location: { x: PLACE.lng, y: PLACE.lat },
+        location: { x: at.lng, y: at.lat },
+        createdAt: created,
         addressHint: "Тест",
         district: "sukhbaatar",
         status,

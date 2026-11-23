@@ -169,6 +169,11 @@ export const ROUTES: Record<string, RouteRule> = {
       { name: "a map box that isn't one", as: "citizen", url: () => "/api/v1/reports?bbox=1,2,x", status: 400 },
     ],
   },
+  "reports/nearby": {
+    allowed: "public",
+    url: () => "/api/v1/reports/nearby?lng=106.9177&lat=47.9186&category=roads",
+    refusals: [{ name: "a point that isn't one", as: "citizen", url: () => "/api/v1/reports/nearby?lng=x&lat=47.9&category=roads", status: 400 }],
+  },
   "reports/[id]": {
     allowed: "public",
     ...lazyReport(() => seededReportId()),

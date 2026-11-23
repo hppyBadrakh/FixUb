@@ -49,10 +49,12 @@ test.describe.serial("full loop: report → priority → assign → resolve → 
     await citizen.getByLabel("Search a street or place").fill("Zaisan");
     await citizen.getByRole("button", { name: "Zaisan" }).click();
     await citizen.getByRole("button", { name: "Continue" }).click();
-    // Nearby open reports of the same kind may be offered first: this is a new one.
-    if (await citizen.getByRole("heading", { name: "Is it one of these?" }).isVisible()) {
-      await citizen.getByRole("button", { name: "Continue" }).click();
-    }
+    // Nearby open reports of the same kind may be offered first (the server looks them up, so
+    // wait for the answer): this is a new one.
+    const hint = citizen.getByRole("heading", { name: "Is it one of these?" });
+    const description = citizen.getByLabel("What's wrong?");
+    await expect(hint.or(description)).toBeVisible();
+    if (await hint.isVisible()) await citizen.getByRole("button", { name: "Continue" }).click();
 
     // 4. Description. 5. Check and submit.
     await citizen.getByLabel("What's wrong?").fill(DESCRIPTION);

@@ -18,6 +18,7 @@ import { uid } from "@/lib/id";
 import { guessDistrict, inServiceArea } from "@/lib/domain/geo";
 import { useT } from "@/lib/i18n";
 import { DISTRICT_META, DISTRICT_ORDER, ICONS, LIMITS, STATUS_META } from "@/lib/meta";
+import { useNearbyReports } from "@/lib/api/nearby";
 import { searchPlaces } from "@/lib/places";
 import { useNow, useStore } from "@/lib/store";
 import type { DistrictId, Report } from "@/lib/types";
@@ -55,7 +56,7 @@ function emptyDraft(requestId = uid("req")): Draft {
 }
 
 export function ReportFlow() {
-  const { ready, state, user, act, catalog } = useStore();
+  const { ready, state, user, act, catalog, server } = useStore();
   const { lang, t, pick: pickBi } = useT();
   const router = useRouter();
   const toast = useToast();
@@ -99,13 +100,42 @@ export function ReportFlow() {
 
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
   const places = useMemo(() => searchPlaces(placeQuery), [placeQuery]);
+  // With a database the server finds them (PostGIS, nearest five, own reports left out). Without
+  // one, the demo does the same over the reports in this browser.
+  const nearby = useNearbyReports(server.configured ? draft.pick : null, draft.category);
   const duplicates = useMemo(
     () =>
-      draft.pick && draft.category
-        ? findDuplicateCandidates(state, { ...draft.pick, category: draft.category }, now).filter((c) => c.report.reporterId !== user?.id)
-        : [],
-    [state, draft.pick, draft.category, now, user?.id],
+      server.configured
+        ? nearby.candidates
+        : draft.pick && draft.category
+          ? findDuplicateCandidates(state, { ...draft.pick, category: draft.category }, now).filter((c) => c.report.reporterId !== user?.id)
+          : [],
+    [server.configured, nearby.candidates, state, draft.pick, draft.category, now, user?.id],
   );
+  // Don't skip the hint because the answer is still on its way.
+  const checkingNearby = draft.step === 3 && !showDuplicates && nearby.loading;
+
+  const advance = () => {
+    // After the location is confirmed, offer nearby open reports of the same kind (FR-004).
+    if (draft.step === 3 && duplicates.length && !showDuplicates) {
+      setShowDuplicates(true);
+      return;
+    }
+    setShowDuplicates(false);
+    set({ step: Math.min(TOTAL, draft.step + 1) as Step });
+  };
+  // "Continue" tapped while the server is still looking for nearby reports: carry on as soon as it answers.
+  const [continueWhenReady, setContinueWhenReady] = useState(false);
+  const advanceRef = useRef(advance);
+  useEffect(() => {
+    advanceRef.current = advance;
+  });
+  useEffect(() => {
+    if (!continueWhenReady || checkingNearby) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the answer of the server arrives after the tap
+    setContinueWhenReady(false);
+    advanceRef.current();
+  }, [continueWhenReady, checkingNearby]);
 
   if (!ready || !restored) return <PageSkeleton />;
 
@@ -218,15 +248,11 @@ export function ReportFlow() {
 
   const goNext = () => {
     if (!validate(draft.step)) return;
-    // After the location is confirmed, offer nearby open reports of the same kind (FR-004).
-    if (draft.step === 3 && duplicates.length && !showDuplicates) {
-      setShowDuplicates(true);
-      return;
-    }
-    setShowDuplicates(false);
-    set({ step: Math.min(TOTAL, draft.step + 1) as Step });
+    if (checkingNearby) return setContinueWhenReady(true);
+    advance();
   };
   const goBack = () => {
+    setContinueWhenReady(false);
     setErrors({});
     if (showDuplicates) return setShowDuplicates(false);
     if (draft.step === 1) router.push("/");
@@ -305,7 +331,7 @@ export function ReportFlow() {
               {t("Буцах", "Back")}
             </Button>
             {draft.step < TOTAL ? (
-              <Button size="lg" variant="primary" fullWidth iconEnd={ArrowRight} onClick={goNext}>
+              <Button size="lg" variant="primary" fullWidth iconEnd={ArrowRight} loading={continueWhenReady && checkingNearby} onClick={goNext}>
                 {t("Үргэлжлүүлэх", "Continue")}
               </Button>
             ) : (

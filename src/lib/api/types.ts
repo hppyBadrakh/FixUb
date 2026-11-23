@@ -67,6 +67,13 @@ export interface ReportsResponse {
   reports: Report[];
 }
 
+/* ---- GET /api/v1/reports/nearby ---- */
+
+/** Open reports of the same category within 50 m, nearest first: the report form's duplicate hint. */
+export interface NearbyResponse {
+  candidates: { report: Report; /** Metres. */ distance: number }[];
+}
+
 /* ---- GET /api/v1/reports/{id} ---- */
 
 export interface ReportResponse {
