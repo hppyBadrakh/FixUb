@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Browser, type Page } from "@playwright/test";
 
 /** Seeded demo users (src/lib/data/seed.ts). */
 export const USERS = {
@@ -43,4 +43,22 @@ export function testJpeg(): Buffer {
   const jfif = [0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00];
   const frame = [0xff, 0xc0, 0x00, 0x0b, 0x08, height >> 8, height & 0xff, width >> 8, width & 0xff, 0x01, 0x01, 0x11, 0x00];
   return Buffer.from([0xff, 0xd8, ...jfif, ...frame, 0xff, 0xd9]);
+}
+
+/** A fresh browser (its own cookies and storage), in English, signed in as a demo user. */
+export async function device(browser: Browser, user: DemoUser): Promise<Page> {
+  const context = await browser.newContext({ permissions: ["camera"] });
+  await context.addInitScript(() => window.localStorage.setItem("fixub-lang", "en"));
+  // An empty map style, served here: the tests then don't depend on the map provider being
+  // reachable, and the map still becomes ready (it jumps to a searched place, which sets the pick).
+  await context.route("https://tiles.openfreemap.org/**", (route) => route.fulfill({ json: { version: 8, sources: {}, layers: [] } }));
+  const page = await context.newPage();
+  await signInAs(page, user);
+  return page;
+}
+
+/** Presses the shutter once the (fake) camera is delivering frames. */
+export async function takePhoto(page: Page) {
+  await expect.poll(() => page.locator("video").evaluate((v) => (v as HTMLVideoElement).videoWidth), { timeout: 20_000 }).toBeGreaterThan(0);
+  await page.getByRole("button", { name: "Take photo", exact: true }).click();
 }
