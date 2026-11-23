@@ -227,10 +227,12 @@ Photos are stored in Cloudflare R2 (the Worker binding `PHOTOS`), with one row p
    is only served to its uploader and to admins; everyone else gets 404.
 
 `npm run dev` uses a simulated bucket on your disk (`.wrangler/`), so uploads work locally with
-no Cloudflare account. **Production has no bucket yet**: R2 must first be enabled on the
-Cloudflare account (see the comment in `wrangler.jsonc`). Until then the deployed site keeps
-photo bytes in Postgres (table `photo_blobs`), which is fine for a small number of photos.
-Once the `PHOTOS` binding exists, new photos go to R2 and each old one moves there the first time it is read.
+no Cloudflare account, and never touch the real bucket. Production uses the R2 bucket
+`fixub-photos` (the `PHOTOS` binding in `wrangler.jsonc`).
+
+A Worker without that binding keeps photo bytes in Postgres instead (table `photo_blobs`); that
+is how production ran before R2 was enabled. Photos stored there move to R2 the first time each
+is read, so the table empties itself with use.
 
 ## Tests
 
@@ -423,9 +425,8 @@ keeps a way to sign in.
 6. **Turn the sample login off.** Remove `DEMO_LOGIN` (or set it to anything but `true`) in the
    Cloudflare dashboard and redeploy. The sample users and the "Sample data" notes disappear and
    `/api/auth/demo/sign-in` no longer exists.
-7. **Photos.** Enable R2 on the Cloudflare account, create the bucket (`npx wrangler r2 bucket
-   create fixub-photos`) and move the `PHOTOS` binding to the top level of `wrangler.jsonc`.
-   Photos already stored in Postgres move to R2 by themselves the first time each is read.
+7. **Photos.** Done: production stores photos in the R2 bucket `fixub-photos`. The sample
+   data's photos are not removed from the bucket by `db:go-live`; empty it separately if needed.
 8. **Plans and monitoring.** See [Operations](#operations): the Workers paid plan, the Neon
    plan, and who gets the Monitor workflow's emails.
 
@@ -478,10 +479,10 @@ Backups are Neon's:
 | Cloudflare Workers requests | 100,000 a day | An open console tab re-reads its lists every 15 s (about 6 requests): roughly 35,000 requests in a working day **per person**. A visitor's tab re-reads once a minute. Three staff with the console open all day use the whole allowance. The paid plan ($5 a month) includes 10 million requests a month |
 | Worker size | 3 MB compressed | The Worker is about 2.45 MB (check with `npx wrangler deploy --dry-run` after a build). The paid plan allows 10 MB |
 | Worker CPU time | 10 ms per request | Large lists (the admin's, with every report) are the first to hit it. The paid plan allows 30 s |
-| Neon compute and storage | 0.5 GB, compute sleeps when idle | Photos in Postgres (`photo_blobs`) fill it quickly: move them to R2. The first request after a sleep is slow |
-| R2 | 10 GB, then paid | Needs to be enabled on the account once (it asks for a payment method) |
+| Neon compute and storage | 0.5 GB, compute sleeps when idle | The first request after a sleep is slow |
+| R2 | 10 GB, then paid | Photos live here (`fixub-photos`) |
 
-So before real use: **the Workers paid plan and R2 are needed; Neon's Launch plan is strongly advised** (7-day restore, no sleeping).
+So before real use: **the Workers paid plan is needed; Neon's Launch plan is strongly advised** (7-day restore, no sleeping).
 
 Measures already in the code: tabs in the background don't poll; only the consoles poll every
 15 s; the public list holds open reports plus the last 90 days and is capped at 1,000; writes
@@ -518,7 +519,6 @@ This is not set up: it needs the two dashboards.
   The `?bbox=` viewport filter exists on the API but the map doesn't use it yet.
 - The dashboards and the statistics page count in SQL, but fall back to counting the loaded
   reports in the browser until the first answer arrives (same definitions, tested against each other).
-- Photos are stored in Postgres until R2 is enabled on the Cloudflare account (see "Photos").
 - Google sign-in needs a Google OAuth client to be configured; there is no consent screen yet.
 - Place search uses a small built-in list of Ulaanbaatar landmarks (no geocoding API).
 - District is guessed from the nearest district centre, not real boundaries.
