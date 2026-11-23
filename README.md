@@ -428,8 +428,10 @@ real partner organizations, their staff, and the plan decisions.
    ```
    It keeps the category tree, real accounts and real organizations, and refuses to run while
    there is no real account. It can't be undone.
-6. **Turn the sample login off.** Remove `DEMO_LOGIN` (or set it to anything but `true`) in the
-   Cloudflare dashboard and redeploy. The sample users and the "Sample data" notes disappear and
+6. **Turn the sample login off.** Set the secret `DEMO_LOGIN` to `false` in the Cloudflare
+   dashboard. Don't just remove it: `npm run deploy` copies `.env.local` into the Worker, and a
+   value the dashboard doesn't set is taken from there, so a deploy from a developer's machine
+   would bring `DEMO_LOGIN=true` back. The sample users and the "Sample data" notes disappear and
    `/api/auth/demo/sign-in` no longer exists.
 7. **Photos.** Done: production stores photos in the R2 bucket `fixub-photos`. The sample
    data's photos are not removed from the bucket by `db:go-live`; empty it separately if needed.
