@@ -161,16 +161,13 @@ export const ROUTES: Record<string, RouteRule> = {
   categories: { allowed: "public" },
   me: { allowed: "public" },
   organizations: { allowed: "public" },
+  statistics: { allowed: "public" },
   reports: {
     allowed: "public",
     refusals: [
       { name: "asking for \"my reports\" without signing in", as: "signedOut", url: () => "/api/v1/reports?mine=1", status: 401 },
       { name: "a map box that isn't one", as: "citizen", url: () => "/api/v1/reports?bbox=1,2,x", status: 400 },
     ],
-  },
-  statistics: {
-    allowed: "public",
-    refusals: [{ name: "a period that isn't offered", as: "citizen", url: () => "/api/v1/statistics?days=45", status: 400 }],
   },
   "reports/nearby": {
     allowed: "public",
@@ -188,12 +185,22 @@ export const ROUTES: Record<string, RouteRule> = {
       { name: "an id that isn't one", as: "admin", url: () => "/api/v1/reports/nope", params: () => ({ id: "nope" }), status: 404 },
     ],
   },
+  "admin/activity": {
+    allowed: ["admin"],
+    refusals: [{ name: "a limit that is too large", as: "admin", url: () => "/api/v1/admin/activity?limit=5000", status: 400 }],
+  },
   "admin/reports": {
     allowed: ["admin"],
     refusals: [{ name: "a filter that isn't one", as: "admin", url: () => "/api/v1/admin/reports?sort=sideways", status: 400 }],
   },
+  "admin/dashboard": {
+    allowed: ["admin"],
+    refusals: [{ name: "a period the overview doesn't offer", as: "admin", url: () => "/api/v1/admin/dashboard?days=5", status: 400 }],
+  },
   "admin/users": { allowed: ["admin"] },
+  "staff/dashboard": { allowed: ["org_staff", "org_manager"] },
   "staff/reports": { allowed: ["org_staff", "org_manager"] },
+  "staff/activity": { allowed: ["org_staff", "org_manager"] },
   "photos/[id]": {
     // A photo on a visible report. Who sees an unattached or hidden one: tests/photos.db.test.ts.
     allowed: "public",

@@ -7,6 +7,7 @@ import { SegmentedControl } from "@/components/ui/form";
 import { Card } from "@/components/ui/overlay";
 import { ActivityFeed, KpiCard, ReportTable, sortReports, type SortKey } from "@/components/fixub/data";
 import { ReportMap } from "@/components/fixub/report-map";
+import { useDashboard } from "@/lib/api/dashboard";
 import { isOpen, summarize } from "@/lib/domain/metrics";
 import { useT } from "@/lib/i18n";
 import { OPEN_STATUSES, ROLE_LABEL } from "@/lib/meta";
@@ -36,7 +37,9 @@ export function StaffQueue() {
     [mine, unitId],
   );
   const rows = useMemo(() => sortReports(lists[tab], sort, lang, catalog), [lists, tab, sort, lang, catalog]);
-  const s = useMemo(() => summarize(mine, now, 7), [mine, now]);
+  // Counted in SQL on the server; the same definitions run here until the answer arrives.
+  const dashboard = useDashboard("staff", 7);
+  const s = useMemo(() => dashboard?.summary ?? summarize(mine, now, 7), [dashboard, mine, now]);
   const activity = useMemo(() => {
     const ids = new Set(mine.map((r) => r.id));
     return state.activity.filter((a) => ids.has(a.reportId)).slice(0, 20);

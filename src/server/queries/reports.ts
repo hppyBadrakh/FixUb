@@ -34,8 +34,8 @@ import type { Actor } from "@/server/actor";
 /** Stands for "somebody else" wherever the demo data had another user's id. */
 export const ANONYMOUS = "";
 
-const FIXUB_TEAM: Bi = { mn: "FixUB баг", en: "FixUB team" };
-const SYSTEM: Bi = { mn: "Систем", en: "System" };
+export const FIXUB_TEAM: Bi = { mn: "FixUB баг", en: "FixUB team" };
+export const SYSTEM: Bi = { mn: "Систем", en: "System" };
 
 /** Lists are capped so one request can't read the whole table forever. Newest first unless asked otherwise. */
 const MAX_REPORTS = 1000;

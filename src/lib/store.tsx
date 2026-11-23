@@ -3,14 +3,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useSWRConfig } from "swr";
 import { useApi, useLiveApi } from "./api/hooks";
-import type { CategoriesResponse, MeResponse, OrganizationsResponse, ReportsResponse, SessionUser, StaffResponse } from "./api/types";
+import type { ActivityResponse, CategoriesResponse, MeResponse, OrganizationsResponse, ReportsResponse, SessionUser, StaffResponse } from "./api/types";
 import { authClient } from "./auth-client";
 import { makeCatalog, type Catalog } from "./catalog";
 import type { ActionResult } from "./domain/actions";
 import { clearPhotos } from "./data/photoStore";
 import { createLocalRepository, type FixubRepository } from "./data/repository";
 import { demoActions, serverActions, type StoreActions } from "./store-actions";
-import type { ActivityEvent, DemoState, Report, User } from "./types";
+import type { DemoState, Report, User } from "./types";
 
 /** What the server offers. Without a database (`configured: false`) the app is the browser-only demo. */
 export interface ServerInfo {
@@ -84,26 +84,6 @@ const NO_SERVER: ServerInfo = { configured: false, google: false, demoLogin: fal
  */
 function toDemoUser(u: SessionUser): User {
   return { id: u.id, name: u.name, role: u.role, organizationId: u.organizationSlug ?? undefined, unitId: u.unitSlug ?? undefined };
-}
-
-/**
- * The activity feed, read off the reports' timelines: created, assigned, status changes and
- * priority decisions, newest first.
- */
-function activityFrom(reports: Report[]): ActivityEvent[] {
-  const out: ActivityEvent[] = [];
-  for (const r of reports) {
-    for (const e of r.timeline) {
-      const base = { id: `${r.id}:${e.id}`, at: e.at, reportId: r.id, actorLabel: e.actorLabel };
-      if (e.type === "assigned") out.push({ ...base, type: "assigned", organizationId: e.organizationId });
-      else if (e.from === null) out.push({ ...base, type: "created", actorLabel: undefined });
-      else out.push({ ...base, type: "status", to: e.to, reason: e.reason });
-    }
-    if (r.priority && r.priorityDecision) {
-      out.push({ id: `${r.id}:priority`, at: r.priorityDecision.at, reportId: r.id, type: "prioritized", priority: r.priority, actorLabel: { mn: "FixUB баг", en: "FixUB team" } });
-    }
-  }
-  return out.sort((a, b) => b.at - a.at).slice(0, 400);
 }
 
 function changedIds(prev: DemoState, next: DemoState): string[] {
@@ -199,6 +179,8 @@ export function FixubProvider({ children }: { children: React.ReactNode }) {
   // Not polled: the categories editor reads the same data and must not change under the admin's hands.
   const categories = useApi<CategoriesResponse>(on ? "/api/v1/categories" : null);
   const staff = useApi<StaffResponse>(role === "admin" ? "/api/v1/admin/users" : null);
+  // The activity feed exists only in the consoles: everything for admins, their own organization for staff.
+  const activity = useLiveApi<ActivityResponse>(role === "admin" ? "/api/v1/admin/activity?limit=200" : isStaff ? "/api/v1/staff/activity?limit=200" : null);
 
   const serverState = useMemo<DemoState>(() => {
     // Each list is what its endpoint lets this user see. A later list knows more about a report
@@ -218,9 +200,9 @@ export function FixubProvider({ children }: { children: React.ReactNode }) {
       organizations: organizations.data?.organizations ?? [],
       categories: categories.data?.categories ?? [],
       users: [...users.values()],
-      activity: activityFrom(reports),
+      activity: activity.data?.events ?? [],
     };
-  }, [publicReports.data, myReports.data, staffReports.data, adminReports.data, organizations.data, categories.data, staff.data, state.users]);
+  }, [publicReports.data, myReports.data, staffReports.data, adminReports.data, organizations.data, categories.data, staff.data, activity.data, state.users]);
   const shown = on ? serverState : state;
 
   // Rows that changed since the last answer of the server get the same highlight as in the demo.

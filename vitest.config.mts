@@ -19,7 +19,8 @@ export default defineConfig({
     setupFiles: ["tests/setup.ts"],
     // The files share one database, and each call opens its own connection to it.
     fileParallelism: false,
-    testTimeout: 30_000,
-    hookTimeout: 60_000,
+    // Generous: against a remote database (Neon from a laptop) every call is a round trip of 100 ms or more.
+    testTimeout: 120_000,
+    hookTimeout: 120_000,
   },
 });

@@ -1,6 +1,6 @@
 // Shapes of the `/api/v1` responses, shared by the route handlers and the screens.
 // Types only: safe to import from client and server code.
-import type { CategoryDef, DistrictId, Organization, Report, ReportStatus, Role, SubcategoryDef, User } from "@/lib/types";
+import type { ActivityEvent, CategoryDef, Organization, Report, Role, SubcategoryDef, User } from "@/lib/types";
 import type { ErrorBody } from "@/server/errors";
 
 /** Every `/api/v1` response is `{ data }` on success or `{ error }` on failure. */
@@ -67,34 +67,6 @@ export interface ReportsResponse {
   reports: Report[];
 }
 
-/* ---- GET /api/v1/statistics ---- */
-
-/** The public statistics page's numbers, counted in SQL over visible reports (src/server/queries/statistics.ts). */
-export interface StatisticsResponse {
-  /** When the numbers were counted, ms since the epoch. */
-  generatedAt: number;
-  /** The period of `resolved` and `medianResponseHours`. */
-  days: 7 | 30 | 90;
-  /** All visible reports. */
-  total: number;
-  /** Reported, investigating or in progress, right now. */
-  open: number;
-  /** Reports that moved to Resolved in the period, and in the equally long period before it. */
-  resolved: number;
-  resolvedPrev: number;
-  /** Median hours from report to first status change, for reports made in the period; null when none. */
-  medianResponseHours: number | null;
-  openOver14: number;
-  byStatus: Record<ReportStatus, number>;
-  /** Open reports by category slug; categories with none are left out. */
-  openByCategory: { category: string; count: number }[];
-  openByDistrict: Record<DistrictId, number>;
-  /** Open reports by how long they have waited. */
-  openByAge: Record<"lt2" | "2-7" | "7-14" | "14-30" | "gt30", number>;
-  /** The last 14 local days (Asia/Ulaanbaatar), oldest first: `labels` are timestamps, one per day. */
-  series: { labels: number[]; incoming: number[]; resolved: number[] };
-}
-
 /* ---- GET /api/v1/reports/nearby ---- */
 export interface NearbyResponse {
   /** Nearest first; `distance` in metres. */
@@ -113,8 +85,68 @@ export interface OrganizationsResponse {
   organizations: Organization[];
 }
 
+/* ---- GET /api/v1/admin/dashboard, /api/v1/staff/dashboard ---- */
+
+/**
+ * The overview's numbers, counted in SQL with the definitions of src/lib/domain/metrics.ts
+ * (`summarize`, `dailySeries`, `ageBuckets`) over the visible reports the caller may see.
+ */
+export interface DashboardResponse {
+  /** The moment the numbers were counted for (ms). Periods end here. */
+  now: number;
+  /** Length of the period in days (`?days=1|7|30`). */
+  days: number;
+  /** The same fields as `summarize(reports, now, days)`. */
+  summary: {
+    open: number;
+    awaiting: number;
+    working: number;
+    unassigned: number;
+    resolved: number;
+    resolvedPrev: number;
+    /** Hours; null when no report of the period got a first response yet. */
+    medianResponse: number | null;
+    medianResponsePrev: number | null;
+    openOver14: number;
+  };
+  /** The same as `dailySeries(reports, now, 14)`: one entry per local day, oldest first. */
+  series: { labels: number[]; incoming: number[]; resolved: number[] };
+  /** The same as `ageBuckets(reports, now)`. */
+  ageBuckets: { key: string; mn: string; en: string; value: number }[];
+  /** Open reports per organization and unit (slugs); `unitId` null = no unit yet. */
+  workload: { organizationId: string; unitId: string | null; open: number }[];
+  /** Reports with an open flag, hidden ones included. Admins only. */
+  flagged?: number;
+}
+
 /* ---- GET /api/v1/admin/users ---- */
 
 export interface StaffResponse {
   users: User[];
+}
+
+/* ---- GET /api/v1/admin/activity, /api/v1/staff/activity ---- */
+
+/**
+ * Recent events on the reports the caller may see, newest first, in the demo's `ActivityEvent`
+ * shape (organizations by slug). Nobody is identified: an event says what happened, and for
+ * a status change which organization (or "FixUB team") acted, never which person.
+ */
+export interface ActivityResponse {
+  events: ActivityEvent[];
+}
+
+/* ---- GET /api/v1/statistics ---- */
+
+/**
+ * The public statistics page, counted in SQL over the visible reports. `summary`, `series` and
+ * `ageBuckets` are the dashboard's; the three breakdowns list only keys that have reports.
+ */
+export interface StatisticsResponse extends Pick<DashboardResponse, "now" | "days" | "summary" | "series" | "ageBuckets"> {
+  /** Visible reports per status. */
+  byStatus: Record<string, number>;
+  /** Open visible reports per category slug. */
+  openByCategory: Record<string, number>;
+  /** Open visible reports per district. */
+  openByDistrict: Record<string, number>;
 }

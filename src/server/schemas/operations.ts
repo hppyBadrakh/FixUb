@@ -1,4 +1,4 @@
-// Operations-side input schemas: status change, priority, assignment, category tree, organization.
+// Operations-side input schemas: status change, priority, assignment, queue filters.
 // Like the citizen schemas, these only check the *shape* of input. Rules that need the database
 // (does the report exist? may this actor do this transition? is a note needed?) stay in the
 // server actions and in `checkTransition` (src/lib/domain/lifecycle.ts).
@@ -32,17 +32,11 @@ export const _closureReasonsMatch: [ClosureReason] extends [(typeof CLOSURE_REAS
 export const OPS_ERROR_CODES = {
   reasonNotAllowed: "reason_not_allowed",
   duplicateNotAllowed: "duplicate_not_allowed",
-  duplicateSlug: "duplicate_slug",
 } as const;
 
 const NOTE_MAX = 500;
-const NAME_MAX = 120;
 const categorySlug = z.string().trim().regex(/^[a-z0-9_-]{1,60}$/);
 const orgSlug = z.string().trim().regex(/^[a-z0-9-]{2,60}$/);
-
-function hasDuplicates(values: string[]): boolean {
-  return new Set(values).size !== values.length;
-}
 
 /* ------------------------------------------------------------------ */
 /* Status change                                                       */
@@ -91,6 +85,16 @@ export const setPrioritySchema = z.object({
 export type SetPriorityInput = z.infer<typeof setPrioritySchema>;
 
 /* ------------------------------------------------------------------ */
+/* Activity feed (query string of the admin and staff activity APIs)  */
+/* ------------------------------------------------------------------ */
+
+export const activityQuerySchema = z.object({
+  /** How many events, newest first. */
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+});
+export type ActivityQuery = z.infer<typeof activityQuerySchema>;
+
+/* ------------------------------------------------------------------ */
 /* Assignment                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -102,80 +106,6 @@ export const assignSchema = z.object({
   unitId: idSchema.nullish(),
 });
 export type AssignInput = z.infer<typeof assignSchema>;
-
-/* ------------------------------------------------------------------ */
-/* Category tree (category -> subcategories)                           */
-/* ------------------------------------------------------------------ */
-
-export const subcategoryInputSchema = z.object({
-  /** Stable id inside its category, e.g. "pothole". */
-  slug: categorySlug,
-  nameMn: z.string().trim().min(1).max(NAME_MAX),
-  nameEn: z.string().trim().min(1).max(NAME_MAX),
-  isActive: z.boolean().default(true),
-  sortOrder: z.number().int().min(0).max(1000).default(0),
-});
-export type SubcategoryInput = z.infer<typeof subcategoryInputSchema>;
-
-export const categoryInputSchema = z
-  .object({
-    /** Stable public id, e.g. "roads". */
-    slug: categorySlug,
-    nameMn: z.string().trim().min(1).max(NAME_MAX),
-    nameEn: z.string().trim().min(1).max(NAME_MAX),
-    /** One of `IconKey` in src/lib/types.ts; the action checks the value. */
-    icon: z.string().trim().min(1).max(40).default("ellipsis"),
-    /** Organization suggested when a report of this category is assigned. */
-    defaultOrganizationId: idSchema.nullish(),
-    isActive: z.boolean().default(true),
-    sortOrder: z.number().int().min(0).max(1000).default(0),
-    subcategories: z.array(subcategoryInputSchema).max(50).default([]),
-  })
-  .superRefine((v, ctx) => {
-    if (hasDuplicates(v.subcategories.map((s) => s.slug))) {
-      ctx.addIssue({ code: "custom", path: ["subcategories"], message: OPS_ERROR_CODES.duplicateSlug });
-    }
-  });
-export type CategoryInput = z.infer<typeof categoryInputSchema>;
-
-/** The whole tree, saved in one go by the categories editor. */
-export const categoryTreeSchema = z
-  .array(categoryInputSchema)
-  .max(50)
-  .superRefine((v, ctx) => {
-    if (hasDuplicates(v.map((c) => c.slug))) {
-      ctx.addIssue({ code: "custom", message: OPS_ERROR_CODES.duplicateSlug });
-    }
-  });
-export type CategoryTreeInput = z.infer<typeof categoryTreeSchema>;
-
-/* ------------------------------------------------------------------ */
-/* Organizations and units                                             */
-/* ------------------------------------------------------------------ */
-
-export const organizationUnitInputSchema = z.object({
-  slug: orgSlug,
-  nameMn: z.string().trim().min(1).max(NAME_MAX),
-  nameEn: z.string().trim().min(1).max(NAME_MAX),
-  isActive: z.boolean().default(true),
-  sortOrder: z.number().int().min(0).max(1000).default(0),
-});
-export type OrganizationUnitInput = z.infer<typeof organizationUnitInputSchema>;
-
-export const organizationInputSchema = z
-  .object({
-    slug: orgSlug,
-    nameMn: z.string().trim().min(2).max(NAME_MAX),
-    nameEn: z.string().trim().min(2).max(NAME_MAX),
-    isActive: z.boolean().default(true),
-    units: z.array(organizationUnitInputSchema).max(50).default([]),
-  })
-  .superRefine((v, ctx) => {
-    if (hasDuplicates(v.units.map((u) => u.slug))) {
-      ctx.addIssue({ code: "custom", path: ["units"], message: OPS_ERROR_CODES.duplicateSlug });
-    }
-  });
-export type OrganizationInput = z.infer<typeof organizationInputSchema>;
 
 /* ------------------------------------------------------------------ */
 /* Queue filters (query string of the review and staff queue APIs)    */
@@ -200,3 +130,15 @@ export const queueFiltersSchema = z.object({
   limit: z.coerce.number().int().min(1).max(QUEUE_LIMIT_MAX).default(QUEUE_LIMIT_MAX),
 });
 export type QueueFilters = z.infer<typeof queueFiltersSchema>;
+
+/* ------------------------------------------------------------------ */
+/* Dashboard (query string of the admin and staff dashboard APIs)     */
+/* ------------------------------------------------------------------ */
+
+/** The periods the overview offers: last day, 7 days, 30 days. */
+export const DASHBOARD_PERIODS = ["1", "7", "30"] as const;
+
+export const dashboardQuerySchema = z.object({
+  days: z.enum(DASHBOARD_PERIODS).default("7").transform(Number),
+});
+export type DashboardQuery = z.infer<typeof dashboardQuerySchema>;
