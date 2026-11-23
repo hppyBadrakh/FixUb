@@ -1,6 +1,6 @@
 // Business rules that need no state, so the demo's actions (./actions.ts) and the server's
 // actions (src/server/actions) run exactly the same code. Pure: no React, no storage, no server.
-import type { CategoryDef, Report } from "../types";
+import type { CategoryDef, CategorySlug, Organization, Report } from "../types";
 
 export function makeRef(seq: number, now: number): string {
   const yy = String(new Date(now).getFullYear()).slice(2);
@@ -34,4 +34,9 @@ export function checkCategoryTree(categories: CategoryDef[]): "invalid_input" | 
     }
   }
   return null;
+}
+
+/** The organization that owns a category by default: the first active one that lists it. */
+export function suggestedOrganization(organizations: readonly Organization[], category: CategorySlug): Organization | undefined {
+  return organizations.find((o) => o.isActive && o.categories.includes(category));
 }

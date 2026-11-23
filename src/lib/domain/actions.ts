@@ -384,10 +384,6 @@ export function upsertOrganization(state: DemoState, user: User | null, org: Org
   return { ok: true, state: { ...state, organizations } };
 }
 
-export function suggestedOrganization(state: DemoState, category: CategorySlug): Organization | undefined {
-  return state.organizations.find((o) => o.isActive && o.categories.includes(category));
-}
-
 export function findDuplicateCandidates(
   state: DemoState,
   p: { lng: number; lat: number; category: CategorySlug },

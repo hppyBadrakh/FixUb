@@ -13,7 +13,7 @@ import { NoPhoto, Photo } from "@/components/fixub/photo";
 import { MetaRow, StatusTimeline } from "@/components/fixub/report-parts";
 import { ReportMap } from "@/components/fixub/report-map";
 import { CategoryTag, PriorityBadge, StatusBadge } from "@/components/fixub/status";
-import { suggestedOrganization, tally } from "@/lib/domain/actions";
+import { suggestedOrganization, tally } from "@/lib/domain/rules";
 import { distanceM } from "@/lib/domain/geo";
 import { canWorkOn, transitionOptions } from "@/lib/domain/lifecycle";
 import { descriptionOf, placeOf, reportTitle } from "@/lib/domain/metrics";
@@ -34,7 +34,7 @@ export function ConsoleReport({ area }: { area: "admin" | "staff" }) {
   const back = area === "admin" ? "/admin/reports" : "/staff";
 
   // Assignment form (admin)
-  const suggestion = report ? suggestedOrganization(state, report.category) : undefined;
+  const suggestion = report ? suggestedOrganization(state.organizations, report.category) : undefined;
   const [orgId, setOrgId] = useState("");
   const [unitId, setUnitId] = useState("");
   // Status form
