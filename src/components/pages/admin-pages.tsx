@@ -9,7 +9,7 @@ import { FilterChip, SegmentedControl, Select, TextField } from "@/components/ui
 import { Card, Dialog, Sheet } from "@/components/ui/overlay";
 import { ReportTable, sortReports, type SortKey } from "@/components/fixub/data";
 import { CategoryTag, StatusBadge } from "@/components/fixub/status";
-import { moderate, restoreSnapshot, uid, upsertOrganization } from "@/lib/domain/actions";
+import { uid } from "@/lib/domain/actions";
 import { descriptionOf, isOpen, placeOf } from "@/lib/domain/metrics";
 import { timeAgo } from "@/lib/format";
 import { useT } from "@/lib/i18n";
@@ -246,7 +246,7 @@ function blankOrg(): Organization {
 }
 
 export function AdminOrganizations() {
-  const { ready, state, run, catalog } = useStore();
+  const { ready, state, act, catalog } = useStore();
   const { t, pick } = useT();
   const toast = useToast();
   const [editing, setEditing] = useState<Organization | null>(null);
@@ -255,23 +255,34 @@ export function AdminOrganizations() {
 
   if (!ready) return <PageSkeleton />;
 
-  const save = () => {
+  const saveFailed = (error: string) =>
+    toast({
+      tone: "danger",
+      title: t("Хадгалж чадсангүй", "Couldn't save"),
+      body:
+        error === "in_use"
+          ? t("Устгасан багт мэдээлэл эсвэл ажилтан хуваарилагдсан хэвээр байна.", "A unit you removed still has reports or staff assigned to it.")
+          : t("Дахин оролдоно уу.", "Try again."),
+    });
+
+  const save = async () => {
     if (!editing) return;
     const e: Record<string, string> = {};
     if (!editing.name.mn.trim()) e.mn = t("Монгол нэрийг оруулна уу.", "Enter the Mongolian name.");
     if (!editing.name.en.trim()) e.en = t("Англи нэрийг оруулна уу.", "Enter the English name.");
     setErrors(e);
     if (Object.keys(e).length) return;
-    const res = run((s, u) => upsertOrganization(s, u, { ...editing, name: { mn: editing.name.mn.trim(), en: editing.name.en.trim() } }));
+    const res = await act.saveOrganization({ ...editing, name: { mn: editing.name.mn.trim(), en: editing.name.en.trim() } });
     if (res.ok) {
       toast({ tone: "success", title: t("Хадгаллаа", "Saved"), body: editing.name.mn });
       setEditing(null);
-    }
+    } else saveFailed(res.error);
   };
 
-  const toggleActive = (o: Organization) => {
-    const res = run((s, u) => upsertOrganization(s, u, { ...o, isActive: !o.isActive }));
-    if (res.ok) toast({ tone: "success", title: o.isActive ? t("Идэвхгүй болголоо", "Deactivated") : t("Идэвхжүүллээ", "Activated"), body: pick(o.name) });
+  const toggleActive = async (o: Organization) => {
+    const res = await act.saveOrganization({ ...o, isActive: !o.isActive });
+    if (!res.ok) saveFailed(res.error);
+    else toast({ tone: "success", title: o.isActive ? t("Идэвхгүй болголоо", "Deactivated") : t("Идэвхжүүллээ", "Activated"), body: pick(o.name) });
   };
 
   return (
@@ -430,7 +441,7 @@ export function AdminOrganizations() {
 /* ================= Moderation ================= */
 
 export function AdminModeration() {
-  const { ready, state, run, freshIds } = useStore();
+  const { ready, state, act: store, freshIds } = useStore();
   const { lang, t, pick } = useT();
   const toast = useToast();
   const now = useNow();
@@ -448,15 +459,18 @@ export function AdminModeration() {
 
   if (!ready) return <PageSkeleton />;
 
-  const act = (r: Report, action: "hide" | "restore" | "dismiss") => {
-    const res = run((s, u, n) => moderate(s, u, r.id, action, n));
-    if (!res.ok) return;
+  const act = async (r: Report, action: "hide" | "restore" | "dismiss") => {
+    const res = await store.moderate(r.id, action);
+    if (!res.ok) {
+      toast({ tone: "danger", title: t("Хадгалж чадсангүй", "Couldn't save") });
+      return;
+    }
     toast({
       tone: "success",
       title:
         action === "hide" ? t(`${r.ref}-ийг нууллаа`, `${r.ref} hidden`) : action === "restore" ? t(`${r.ref}-ийг сэргээлээ`, `${r.ref} restored`) : t("Мэдэгдлийг хаалаа", "Flags dismissed"),
       body: t("Аудитын бүртгэлд орлоо.", "Recorded in the audit log."),
-      action: { label: t("Буцаах", "Undo"), onClick: () => run((s, u) => restoreSnapshot(s, u, r)) },
+      action: { label: t("Буцаах", "Undo"), onClick: () => void res.undo() },
     });
   };
 

@@ -12,7 +12,6 @@ import { NoPhoto, Photo } from "@/components/fixub/photo";
 import { CitizenSignals, MetaRow, ReportCard, StatusTimeline } from "@/components/fixub/report-parts";
 import { ReportMap } from "@/components/fixub/report-map";
 import { CategoryTag, PriorityBadge, StatusBadge } from "@/components/fixub/status";
-import { flagReport, setVerdict, toggleMeToo } from "@/lib/domain/actions";
 import { distanceM } from "@/lib/domain/geo";
 import { descriptionOf, placeOf, reportTitle } from "@/lib/domain/metrics";
 import { formatDateTime, timeAgo } from "@/lib/format";
@@ -46,7 +45,7 @@ export function nextStep(r: Report, state: DemoState, t: (mn: string, en: string
 
 export function ReportDetail() {
   const { id } = useParams<{ id: string }>();
-  const { ready, state, user, run, freshIds, catalog } = useStore();
+  const { ready, state, user, act, freshIds, catalog } = useStore();
   const { lang, t, pick } = useT();
   const toast = useToast();
   const router = useRouter();
@@ -89,6 +88,8 @@ export function ReportDetail() {
       own_report: t("Өөрийн мэдээлэлд нэмэх боломжгүй.", "You can't “me too” your own report."),
       not_open: t("Энэ мэдээлэл хаагдсан.", "This report is no longer open."),
       already_flagged: t("Та аль хэдийн мэдэгдсэн байна.", "You've already flagged this report."),
+      not_resolved: t("Энэ мэдээлэл шийдэгдээгүй байна.", "This report isn't resolved."),
+      rate_limited: t("Хэт олон хүсэлт илгээлээ. Хэсэг хүлээгээд дахин оролдоно уу.", "Too many requests. Wait a little and try again."),
     })[e] ?? t("Алдаа гарлаа. Дахин оролдоно уу.", "Something went wrong. Try again.");
 
   return (
@@ -232,14 +233,15 @@ export function ReportDetail() {
             userId={user?.id ?? null}
             signedIn={!!user}
             onSignIn={signIn}
-            onMeToo={() => {
-              const res = run((s, u, n) => toggleMeToo(s, u, report.id, n));
+            onMeToo={async () => {
+              const had = report.confirmations.includes(user!.id);
+              const res = await act.toggleMeToo(report.id);
               if (!res.ok) toast({ tone: "danger", title: errorText(res.error) });
-              else if (report.confirmations.includes(user!.id)) toast({ tone: "info", title: t("Таны баталгаажуулалтыг хаслаа", "Your confirmation was removed") });
+              else if (had) toast({ tone: "info", title: t("Таны баталгаажуулалтыг хаслаа", "Your confirmation was removed") });
               else toast({ tone: "success", title: t("Баталгаажуулалт нэмэгдлээ", "Confirmation added"), body: t("Байгууллага нөлөөг нь харна.", "The organization can see the impact.") });
             }}
-            onVerdict={(v) => {
-              const res = run((s, u, n) => setVerdict(s, u, report.id, v, n));
+            onVerdict={async (v) => {
+              const res = await act.setVerdict(report.id, v);
               if (!res.ok) toast({ tone: "danger", title: errorText(res.error) });
               else if (v) toast({ tone: "success", title: v === "fixed" ? t("Баярлалаа — зассан гэж бүртгэлээ", "Thanks — recorded as fixed") : t("Баярлалаа — засаагүй гэж бүртгэлээ", "Thanks — recorded as still broken") });
             }}
@@ -282,8 +284,8 @@ export function ReportDetail() {
             </Button>
             <Button
               variant="primary"
-              onClick={() => {
-                const res = run((s, u, n) => flagReport(s, u, report.id, flagReason, flagDetails, n));
+              onClick={async () => {
+                const res = await act.flagReport(report.id, flagReason, flagDetails);
                 setFlagOpen(false);
                 if (!res.ok) toast({ tone: "danger", title: errorText(res.error) });
                 else

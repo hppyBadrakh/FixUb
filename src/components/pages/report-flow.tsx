@@ -13,9 +13,8 @@ import { DuplicateHint, Stepper } from "@/components/fixub/report-parts";
 import { ReportMap, type PickValue } from "@/components/fixub/report-map";
 import { PriorityBadge, StatusBadge } from "@/components/fixub/status";
 import { cn } from "@/lib/cn";
-import { createReport, findDuplicateCandidates, toggleMeToo, uid } from "@/lib/domain/actions";
+import { findDuplicateCandidates, uid } from "@/lib/domain/actions";
 import { guessDistrict, inServiceArea } from "@/lib/domain/geo";
-import { putPhoto } from "@/lib/data/photoStore";
 import { useT } from "@/lib/i18n";
 import { DISTRICT_META, DISTRICT_ORDER, ICONS, LIMITS, STATUS_META } from "@/lib/meta";
 import { searchPlaces } from "@/lib/places";
@@ -55,7 +54,7 @@ function emptyDraft(requestId = uid("req")): Draft {
 }
 
 export function ReportFlow() {
-  const { ready, state, user, run, catalog } = useStore();
+  const { ready, state, user, act, catalog } = useStore();
   const { lang, t, pick: pickBi } = useT();
   const router = useRouter();
   const toast = useToast();
@@ -68,7 +67,7 @@ export function ReportFlow() {
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [confirmedDup, setConfirmedDup] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [done, setDone] = useState<Report | null>(null);
+  const [done, setDone] = useState<Pick<Report, "id" | "ref"> | null>(null);
   const [placeQuery, setPlaceQuery] = useState("");
   const headingRef = useRef<HTMLHeadingElement>(null);
   const subRef = useRef<HTMLFieldSetElement>(null);
@@ -177,8 +176,8 @@ export function ReportFlow() {
   }
 
   /* ---------- Me too instead (from the duplicate hint) ---------- */
-  const confirmDuplicate = (id: string) => {
-    const res = run((s, u, n) => toggleMeToo(s, u, id, n));
+  const confirmDuplicate = async (id: string) => {
+    const res = await act.toggleMeToo(id);
     if (!res.ok) {
       toast({ tone: "danger", title: t("Нэмж чадсангүй", "Couldn't add your “me too”") });
       return;
@@ -234,7 +233,17 @@ export function ReportFlow() {
   };
 
   const onCapture = async (blob: Blob) => {
-    const id = await putPhoto(blob);
+    let id: string;
+    try {
+      id = await act.savePhoto(blob);
+    } catch {
+      toast({
+        tone: "danger",
+        title: t("Зургийг хадгалж чадсангүй", "Couldn't save the photo"),
+        body: t("Холболтоо шалгаад дахин авна уу.", "Check your connection and take it again."),
+      });
+      return;
+    }
     setDraft((d) => ({ ...d, photoIds: [...d.photoIds, id].slice(0, LIMITS.photosMax) }));
     setCameraOpen(false);
     setErrors({});
@@ -244,32 +253,28 @@ export function ReportFlow() {
     if (!draft.pick || !draft.category || !draft.subcategory) return;
     setSubmitting(true);
     // Small delay so the "sending" state is visible, as it would be over a network.
-    setTimeout(() => {
-      const res = run((s, u, n) =>
-        createReport(
-          s,
-          u,
-          {
-            category: draft.category!,
-            subcategory: draft.subcategory!,
-            description: draft.description,
-            lng: draft.pick!.lng,
-            lat: draft.pick!.lat,
-            accuracyM: draft.pick!.accuracyM,
-            addressHint: draft.addressHint,
-            district: draft.district ?? guessDistrict(draft.pick!),
-            photoIds: draft.photoIds,
-            clientRequestId: draft.clientRequestId,
-          },
-          n,
-        ),
-      );
+    setTimeout(async () => {
+      const res = await act.createReport({
+        category: draft.category!,
+        subcategory: draft.subcategory!,
+        description: draft.description,
+        lng: draft.pick!.lng,
+        lat: draft.pick!.lat,
+        accuracyM: draft.pick!.accuracyM,
+        addressHint: draft.addressHint,
+        district: draft.district ?? guessDistrict(draft.pick!),
+        photoIds: draft.photoIds,
+        clientRequestId: draft.clientRequestId,
+      });
       setSubmitting(false);
       if (!res.ok) {
         toast({
           tone: "danger",
           title: t("Илгээж чадсангүй", "Couldn't send your report"),
-          body: t("Юу ч алдагдаагүй — таны мэдээлэл энд хадгалагдсан. Дахин оролдоно уу.", "Nothing was lost — your report is still here. Try again."),
+          body:
+            res.error === "rate_limited"
+              ? t("Та нэг цагт хэт олон мэдээлэл илгээлээ. Хэсэг хүлээгээд дахин оролдоно уу.", "You've sent too many reports this hour. Wait a little and try again.")
+              : t("Юу ч алдагдаагүй — таны мэдээлэл энд хадгалагдсан. Дахин оролдоно уу.", "Nothing was lost — your report is still here. Try again."),
         });
         return;
       }
