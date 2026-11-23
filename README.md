@@ -439,11 +439,13 @@ What keeps the site running, what it costs, and what to do before real traffic.
 ### Watching it
 
 - **`GET /api/health`** answers `{ ok: true }` when the Worker runs and reaches the database, 503 otherwise.
-- **The Monitor workflow** (`.github/workflows/monitor.yml`) calls it and the main pages every
-  30 minutes. A failed run means the site is down: GitHub emails whoever watches the
-  repository's Actions (your GitHub Settings → Notifications → Actions → "Only notify for failed
-  workflows"). GitHub may delay scheduled runs by several minutes, and stops them after 60 days
-  without a commit.
+- **Round-the-clock monitoring is not set up.** Point an uptime service (UptimeRobot, Better
+  Stack and similar have free plans) at `https://<site>/api/health`, expecting `"ok":true`, and
+  have it email or message you. It needs an account, so it is yours to create.
+- **The Monitor workflow** (`.github/workflows/monitor.yml`) does the same checks from GitHub,
+  but only when run by hand: Cloudflare blocks GitHub's servers from reaching ubfix.site, so on
+  a schedule it would fail every time. It is useful against an address Cloudflare doesn't
+  guard, or after that block is lifted.
 - **Errors and logs**: Cloudflare dashboard → Workers → fixub → Observability. Server errors are
   logged with a `[server]` prefix. There is no error-tracking service or paging yet.
 

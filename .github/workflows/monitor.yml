@@ -1,13 +1,18 @@
-# Checks the live site every 30 minutes. When a check fails the run fails, and GitHub emails
-# the people watching this repository's Actions (Settings → Notifications → Actions).
+# Checks a site's health endpoint and main pages. Run it by hand (Actions → Monitor → Run
+# workflow) after a deploy, or against another address by setting the repository variable
+# SITE_URL (Settings → Secrets and variables → Actions → Variables).
 #
-# It needs no secrets: it only reads public pages. To watch another address, set the
-# repository variable SITE_URL (Settings → Secrets and variables → Actions → Variables).
+# It is NOT on a schedule: Cloudflare blocks GitHub's servers from reaching ubfix.site (they get
+# the "Attention Required" page), so a scheduled run would fail every time although the site is
+# up. For round-the-clock monitoring point an uptime service at /api/health instead: see
+# "Operations" in the README. To schedule this workflow anyway, first let these requests
+# through in Cloudflare, then add:
+#
+#   schedule:
+#     - cron: "7,37 * * * *"
 name: Monitor
 
 on:
-  schedule:
-    - cron: "7,37 * * * *"
   workflow_dispatch:
 
 permissions: {}
