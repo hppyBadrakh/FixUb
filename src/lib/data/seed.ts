@@ -3,8 +3,6 @@ import { DEFAULT_CATEGORIES, ROLE_LABEL } from "../meta";
 import { makeRef } from "../domain/rules";
 import { uid } from "../id";
 import { DEMO_USERS } from "../fixtures/personas";
-
-export { DEMO_USERS } from "../fixtures/personas";
 import type {
   ActivityEvent,
   Bi,

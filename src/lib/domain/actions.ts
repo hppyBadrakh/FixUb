@@ -24,12 +24,6 @@ import { checkTransition } from "./lifecycle";
 import { checkCategoryTree, makeRef, tally } from "./rules";
 import { uid } from "../id";
 
-// Moved to ./errors, ./rules and ../id so the server does not import the demo's actions.
-// Re-exported here so existing imports keep working.
-export type { ActionError } from "./errors";
-export { checkCategoryTree, makeRef, tally } from "./rules";
-export { uid } from "../id";
-
 export type ActionResult<T = object> =
   | ({ ok: true; state: DemoState } & T)
   | { ok: false; error: ActionError };

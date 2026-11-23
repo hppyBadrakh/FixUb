@@ -4,7 +4,7 @@ import { forwardRef } from "react";
 import { ArrowRight, CircleCheck, CircleX, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
-import { tally } from "@/lib/domain/actions";
+import { tally } from "@/lib/domain/rules";
 import { placeOf, reportTitle } from "@/lib/domain/metrics";
 import { formatDateTime, formatDistance, timeAgo } from "@/lib/format";
 import { useT } from "@/lib/i18n";

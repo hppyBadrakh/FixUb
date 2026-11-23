@@ -9,7 +9,7 @@ import { FilterChip, SegmentedControl, Select, TextField } from "@/components/ui
 import { Card, Dialog, Sheet } from "@/components/ui/overlay";
 import { ReportTable, sortReports, type SortKey } from "@/components/fixub/data";
 import { CategoryTag, StatusBadge } from "@/components/fixub/status";
-import { uid } from "@/lib/domain/actions";
+import { uid } from "@/lib/id";
 import { descriptionOf, isOpen, placeOf } from "@/lib/domain/metrics";
 import { timeAgo } from "@/lib/format";
 import { useT } from "@/lib/i18n";

@@ -1,6 +1,6 @@
 // Photos live in IndexedDB (browser-local) so they don't exhaust the ~5 MB localStorage quota.
 // Falls back to memory when IndexedDB is unavailable.
-import { uid } from "../domain/actions";
+import { uid } from "../id";
 
 const DB = "fixub-photos";
 const STORE = "photos";
