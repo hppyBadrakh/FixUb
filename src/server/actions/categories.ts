@@ -13,7 +13,7 @@
 import { and, eq, inArray, notInArray } from "drizzle-orm";
 import * as z from "zod";
 import { auditEvents, categories, reports, subcategories } from "@/db/schema";
-import { checkCategoryTree } from "@/lib/domain/actions";
+import { checkCategoryTree } from "@/lib/domain/rules";
 import { ICON_KEYS } from "@/lib/api/schemas";
 import { action } from "@/server/action";
 import { getActor, requireRole } from "@/server/actor";

@@ -19,33 +19,20 @@ import type {
   Verdict,
 } from "../types";
 import { distanceM, inServiceArea } from "./geo";
-import { checkTransition, type TransitionError } from "./lifecycle";
+import type { ActionError } from "./errors";
+import { checkTransition } from "./lifecycle";
+import { checkCategoryTree, makeRef, tally } from "./rules";
+import { uid } from "../id";
 
-export type ActionError =
-  | TransitionError
-  | "forbidden"
-  | "signed_out"
-  | "conflict"
-  | "out_of_area"
-  | "description_length"
-  | "too_many_photos"
-  | "own_report"
-  | "not_open"
-  | "not_resolved"
-  | "already_flagged"
-  | "photo_required"
-  | "invalid_category"
-  | "in_use"
-  | "invalid_input";
+// Moved to ./errors, ./rules and ../id so the server does not import the demo's actions.
+// Re-exported here so existing imports keep working.
+export type { ActionError } from "./errors";
+export { checkCategoryTree, makeRef, tally } from "./rules";
+export { uid } from "../id";
 
 export type ActionResult<T = object> =
   | ({ ok: true; state: DemoState } & T)
   | { ok: false; error: ActionError };
-
-export function uid(prefix = ""): string {
-  // Not crypto.randomUUID: it is missing on plain-http LAN demos (non-secure context).
-  return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
-}
 
 const err = (error: ActionError) => ({ ok: false as const, error });
 
@@ -66,11 +53,6 @@ function withReport(state: DemoState, id: string, fn: (r: Report) => Report): De
 
 function addActivity(state: DemoState, ev: Omit<ActivityEvent, "id">): DemoState {
   return { ...state, activity: [{ id: uid("a"), ...ev }, ...state.activity].slice(0, 400) };
-}
-
-export function makeRef(seq: number, now: number): string {
-  const yy = String(new Date(now).getFullYear()).slice(2);
-  return `FX-${yy}-${String(seq).padStart(5, "0")}`;
 }
 
 export interface CreateReportInput {
@@ -285,16 +267,6 @@ export function setVerdict(
   return { ok: true, state: next };
 }
 
-export function tally(feedback: Report["feedback"]) {
-  let fixed = 0;
-  let notFixed = 0;
-  for (const f of feedback) {
-    if (f.verdict === "fixed") fixed++;
-    else notFixed++;
-  }
-  return { fixed, notFixed };
-}
-
 export function flagReport(
   state: DemoState,
   user: User | null,
@@ -375,25 +347,6 @@ export function setPriority(
   }));
   next = addActivity(next, { at: now, reportId, type: "prioritized", priority, actorLabel: actorLabelOf(state, user) });
   return { ok: true, state: next };
-}
-
-/**
- * Shape rules of the category tree, shared by the demo and the server action: every category and
- * subcategory has a Mongolian and an English name, ids are unique, and a category has at least
- * one subcategory.
- */
-export function checkCategoryTree(categories: CategoryDef[]): "invalid_input" | null {
-  const ids = new Set<string>();
-  for (const c of categories) {
-    if (!c.name.mn.trim() || !c.name.en.trim() || ids.has(c.id) || !c.subcategories.length) return "invalid_input";
-    ids.add(c.id);
-    const subIds = new Set<string>();
-    for (const sc of c.subcategories) {
-      if (!sc.name.mn.trim() || !sc.name.en.trim() || subIds.has(sc.id)) return "invalid_input";
-      subIds.add(sc.id);
-    }
-  }
-  return null;
 }
 
 /**

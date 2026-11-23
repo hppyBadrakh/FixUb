@@ -1,7 +1,7 @@
 // One error type for the whole server. Throw an AppError anywhere below a route handler or a
 // server action; `api()` (src/server/api.ts) turns it into an HTTP response and `action()`
 // (src/server/action.ts) into `{ ok: false, error }`, which is the shape the demo screens already handle.
-import type { ActionError } from "@/lib/domain/actions";
+import type { ActionError } from "@/lib/domain/errors";
 
 /** The demo's error codes, plus the ones only a real server can produce. */
 export type ErrorCode = ActionError | "not_configured" | "rate_limited" | "internal";

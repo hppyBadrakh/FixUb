@@ -6,12 +6,12 @@ import { setSessionCookie } from "better-auth/cookies";
 import * as z from "zod";
 import type { Db } from "@/db/client";
 import * as schema from "@/db/schema";
-import { DEMO_USERS } from "@/lib/data/seed";
+import { DEMO_USER_IDS } from "@/lib/fixtures/personas";
 import { serverEnv } from "./env";
 import { AppError } from "./errors";
 
-/** The seeded personas the demo login may sign in as. Nobody else, ever. */
-export const DEMO_USER_IDS: readonly string[] = DEMO_USERS.map((u) => u.id);
+// The seeded personas the demo login may sign in as (nobody else, ever): DEMO_USER_IDS.
+export { DEMO_USER_IDS };
 
 /**
  * Demo login: POST /api/auth/demo/sign-in { userId } signs in as a seeded persona without a

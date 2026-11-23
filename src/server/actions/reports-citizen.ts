@@ -15,7 +15,7 @@ import {
   resolutionFeedback,
   subcategories,
 } from "@/db/schema";
-import { makeRef } from "@/lib/domain/actions";
+import { makeRef } from "@/lib/domain/rules";
 import { LIMITS, OPEN_STATUSES } from "@/lib/meta";
 import { action } from "@/server/action";
 import { getActor, requireActor } from "@/server/actor";
