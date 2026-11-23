@@ -59,3 +59,25 @@ test("a visitor can't upload a photo", async ({ page }) => {
   const res = await page.request.post("/api/v1/photos", { headers: { "Content-Type": "image/jpeg" }, data: testJpeg() });
   expect(res.status()).toBe(401);
 });
+
+test("a signed-out visitor can open public reports, in both languages", async ({ browser }) => {
+  const reports = (await (await fetch("http://localhost:3000/api/v1/reports")).json()) as { data: { reports: { id: string; status: string }[] } };
+  // One of each status: open reports offer "me too", resolved ones the verdict, and all must render for a visitor.
+  const byStatus = new Map(reports.data.reports.map((r) => [r.status, r.id]));
+  expect(byStatus.size).toBeGreaterThan(1);
+
+  for (const lang of ["mn", "en"]) {
+    const context = await browser.newContext();
+    await context.addInitScript((l) => window.localStorage.setItem("fixub-lang", l), lang);
+    const page = await context.newPage();
+    const errors: string[] = [];
+    page.on("pageerror", (err) => errors.push(err.message));
+    for (const [status, id] of byStatus) {
+      await page.goto(`/reports/${id}`);
+      await expect(page.locator("main h1"), `${lang} ${status}`).toBeVisible();
+      await expect(page.getByText(/couldn.t load/i)).toHaveCount(0);
+    }
+    expect(errors).toEqual([]);
+    await context.close();
+  }
+});

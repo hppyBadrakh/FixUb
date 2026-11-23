@@ -234,7 +234,10 @@ export function ReportDetail() {
             signedIn={!!user}
             onSignIn={signIn}
             onMeToo={async () => {
-              const had = report.confirmations.includes(user!.id);
+              // Only offered to a signed-in person. (`user!.id` here made the compiled page read `user.id`
+              // while rendering, which threw for every signed-out visitor.)
+              if (!user) return;
+              const had = report.confirmations.includes(user.id);
               const res = await act.toggleMeToo(report.id);
               if (!res.ok) toast({ tone: "danger", title: errorText(res.error) });
               else if (had) toast({ tone: "info", title: t("Таны баталгаажуулалтыг хаслаа", "Your confirmation was removed") });
