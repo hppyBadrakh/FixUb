@@ -1,5 +1,5 @@
 // Citizen-side input schemas: create report, me-too, verdict, flag.
-// They mirror the checks in src/lib/domain/actions.ts, which stays the reference for the rules.
+// Schemas check the shape of the input; rules that need the database are in the server actions.
 import { z } from "zod";
 import { inServiceArea } from "@/lib/domain/geo";
 import { LIMITS } from "@/lib/meta";
@@ -7,8 +7,8 @@ import type { FlagReason } from "@/lib/types";
 import { districtSchema, idSchema, latSchema, lngSchema } from "./common";
 
 /**
- * The demo requires a camera photo on every report. Photo upload to R2 arrives after the first
- * database-backed report flow (B06 before B10): set this to false until then.
+ * Every report needs at least one photo taken with the camera (uploaded first, see
+ * src/server/photos.ts).
  */
 export const REQUIRE_PHOTO = true;
 

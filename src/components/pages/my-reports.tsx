@@ -62,7 +62,7 @@ export function MyReports() {
         title={t("Өөрийн мэдээллээ харахын тулд нэвтэрнэ үү", "Sign in to see your reports")}
         action={
           <ButtonLink href="/login?next=/my-reports" variant="primary">
-            {t("Демо иргэнээр нэвтрэх", "Sign in as a demo citizen")}
+            {t("Нэвтрэх", "Sign in")}
           </ButtonLink>
         }
       />

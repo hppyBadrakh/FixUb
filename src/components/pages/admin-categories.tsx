@@ -1,14 +1,10 @@
 "use client";
 
-// REFERENCE EXAMPLE — a converted screen. The pattern for every screen:
+// A screen with its own data, not the store's: an editor must not change under the admin's
+// hands, so it reads once with useApi() (SWR), saves with a server action, then mutate()s.
 //
-//   <CategoriesEditor>       the screen's UI, unchanged. It gets its data and a save function
-//                            as props and doesn't know where they come from.
-//   <AdminCategoriesApi>     real app: reads with useApi() (SWR), writes with a server action,
-//                            then mutate() to re-read.
-//   <AdminCategoriesDemo>    the old browser-only code (useStore). Kept so the demo still works
-//                            without a database; deleted in week 4.
-//   <AdminCategories>        picks one: `server.configured` says whether there is a database.
+//   <AdminCategories>        reads GET /api/v1/categories and saves with saveCategories.
+//   <CategoriesEditor>       the form. It gets its data and a save function as props.
 import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
 import { Button, IconButton } from "@/components/ui/button";
@@ -17,10 +13,9 @@ import { Select, TextField } from "@/components/ui/form";
 import { Card } from "@/components/ui/overlay";
 import { useApi } from "@/lib/api/hooks";
 import type { CategoriesResponse } from "@/lib/api/types";
-import { saveCategories as saveCategoriesDemo, uid } from "@/lib/domain/actions";
+import { uid } from "@/lib/domain/rules";
 import { useT } from "@/lib/i18n";
 import { ICONS } from "@/lib/meta";
-import { useStore } from "@/lib/store";
 import type { CategoryDef, IconKey } from "@/lib/types";
 import { saveCategories } from "@/server/actions/categories";
 import type { ErrorCode } from "@/server/errors";
@@ -47,20 +42,12 @@ function move<T>(list: T[], i: number, by: -1 | 1): T[] {
   return next;
 }
 
-/** Picks the data source. Everything below it is either the real app or the browser-only demo. */
+/** The editor on GET /api/v1/categories and the saveCategories server action. */
 export function AdminCategories() {
-  const { ready, server } = useStore();
-  if (!ready) return <PageSkeleton />;
-  return server.configured ? <AdminCategoriesApi /> : <AdminCategoriesDemo />;
-}
-
-/* ---------- Real app: GET /api/v1/categories + the saveCategories server action ---------- */
-
-function AdminCategoriesApi() {
   const { t } = useT();
   const { data, error, isLoading, mutate } = useApi<CategoriesResponse>("/api/v1/categories");
 
-  // The API adds report counts to the demo's CategoryDef; the editor wants the two apart.
+  // The API adds report counts to each CategoryDef; the editor wants the two apart.
   const saved = useMemo<CategoryDef[]>(
     () =>
       (data?.categories ?? []).map((c) => ({
@@ -105,32 +92,6 @@ function AdminCategoriesApi() {
         if (!res.ok) return res.error;
         await mutate(); // re-read the tree (and the counts) from the database
         return null;
-      }}
-    />
-  );
-}
-
-/* ---------- Browser-only demo (no database): unchanged behaviour ---------- */
-
-function AdminCategoriesDemo() {
-  const { state, run } = useStore();
-  // How many reports use each category / subcategory (those can be renamed but not removed).
-  const usage = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const r of state.reports) {
-      m.set(r.category, (m.get(r.category) ?? 0) + 1);
-      m.set(`${r.category}/${r.subcategory}`, (m.get(`${r.category}/${r.subcategory}`) ?? 0) + 1);
-    }
-    return m;
-  }, [state.reports]);
-
-  return (
-    <CategoriesEditor
-      saved={state.categories}
-      usage={usage}
-      onSave={async (categories) => {
-        const res = run((s, u) => saveCategoriesDemo(s, u, categories));
-        return res.ok ? null : res.error;
       }}
     />
   );

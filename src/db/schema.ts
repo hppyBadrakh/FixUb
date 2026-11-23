@@ -1,5 +1,5 @@
 // FixUB database schema (Postgres + PostGIS), following the Architecture Package, section 7,
-// plus what the demo added: units, the category → subcategory tree, report priority and the
+// plus: units, the category → subcategory tree, report priority and the
 // priority decision.
 //
 // Only A changes this file. After a change: `npm run db:generate`, review the SQL in `drizzle/`,
@@ -190,7 +190,7 @@ export const categories = pgTable(
   "categories",
   {
     id: smallint("id").primaryKey().generatedAlwaysAsIdentity(),
-    /** Stable public id (the demo's `CategoryDef.id`, e.g. "roads"). */
+    /** Stable public id (the `CategoryDef.id`, e.g. "roads"). */
     slug: text("slug").notNull().unique(),
     nameMn: text("name_mn").notNull(),
     nameEn: text("name_en").notNull(),
@@ -217,7 +217,7 @@ export const subcategories = pgTable(
     categoryId: smallint("category_id")
       .notNull()
       .references(() => categories.id, { onDelete: "cascade" }),
-    /** Stable public id inside its category (the demo's `SubcategoryDef.id`, e.g. "pothole"). */
+    /** Stable public id inside its category (the `SubcategoryDef.id`, e.g. "pothole"). */
     slug: text("slug").notNull(),
     nameMn: text("name_mn").notNull(),
     nameEn: text("name_en").notNull(),

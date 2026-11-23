@@ -1,8 +1,6 @@
 "use server";
 
 // What a resident does: file a report, say "me too", say whether a fix worked, flag a report.
-// Each action replaces the demo function of the same name in src/lib/domain/actions.ts and
-// returns the same error codes.
 import { and, count, desc, eq, sql } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import {
@@ -15,7 +13,7 @@ import {
   resolutionFeedback,
   subcategories,
 } from "@/db/schema";
-import { makeRef } from "@/lib/domain/actions";
+import { makeRef } from "@/lib/domain/rules";
 import { LIMITS, OPEN_STATUSES } from "@/lib/meta";
 import { action } from "@/server/action";
 import { getActor, requireActor } from "@/server/actor";

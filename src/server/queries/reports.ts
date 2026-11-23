@@ -19,7 +19,7 @@ import { ROLE_LABEL } from "@/lib/meta";
 import type { Bi, Flag, Report, TimelineEvent } from "@/lib/types";
 import type { Actor } from "@/server/actor";
 
-// Reports as the screens read them: the demo's `Report` shape (src/lib/types.ts), built for one
+// Reports as the screens read them: the `Report` shape (src/lib/types.ts), built for one
 // viewer. What a viewer must not learn is left out here, on the server:
 //
 // - Other people are never identified. `reporterId` is the viewer's own id or null;
@@ -31,7 +31,7 @@ import type { Actor } from "@/server/actor";
 //
 // Organizations and units are identified by their slug ("org-road"), categories too ("roads").
 
-/** Stands for "somebody else" wherever the demo data had another user's id. */
+/** Stands for "somebody else" wherever a list would hold another user's id. */
 export const ANONYMOUS = "";
 
 export const FIXUB_TEAM: Bi = { mn: "FixUB баг", en: "FixUB team" };

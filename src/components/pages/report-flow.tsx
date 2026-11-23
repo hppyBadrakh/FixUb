@@ -13,7 +13,7 @@ import { DuplicateHint, Stepper } from "@/components/fixub/report-parts";
 import { ReportMap, type PickValue } from "@/components/fixub/report-map";
 import { PriorityBadge, StatusBadge } from "@/components/fixub/status";
 import { cn } from "@/lib/cn";
-import { findDuplicateCandidates, uid } from "@/lib/domain/actions";
+import { findDuplicateCandidates, uid } from "@/lib/domain/rules";
 import { guessDistrict, inServiceArea } from "@/lib/domain/geo";
 import { useT } from "@/lib/i18n";
 import { DISTRICT_META, DISTRICT_ORDER, ICONS, LIMITS, STATUS_META } from "@/lib/meta";
@@ -120,7 +120,7 @@ export function ReportFlow() {
             )}
           </p>
           <ButtonLink href="/login?next=/reports/new" variant="primary" size="lg" icon={LogIn} className="mt-6">
-            {t("Демо иргэнээр нэвтрэх", "Sign in as a demo citizen")}
+            {t("Нэвтрэх", "Sign in")}
           </ButtonLink>
         </div>
       </FlowFrame>

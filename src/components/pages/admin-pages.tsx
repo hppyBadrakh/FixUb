@@ -9,7 +9,7 @@ import { FilterChip, SegmentedControl, Select, TextField } from "@/components/ui
 import { Card, Dialog, Sheet } from "@/components/ui/overlay";
 import { ReportTable, sortReports, type SortKey } from "@/components/fixub/data";
 import { CategoryTag, StatusBadge } from "@/components/fixub/status";
-import { uid } from "@/lib/domain/actions";
+import { uid } from "@/lib/domain/rules";
 import { descriptionOf, isOpen, placeOf } from "@/lib/domain/metrics";
 import { timeAgo } from "@/lib/format";
 import { useT } from "@/lib/i18n";
@@ -292,8 +292,8 @@ export function AdminOrganizations() {
           <h1 className="text-title-1 font-[650] tracking-tight">{t("Байгууллага, засварын баг", "Organizations and repair units")}</h1>
           <p className="max-w-[70ch] text-small text-ink-muted">
             {t(
-              "Демо байгууллагууд нь зохиомол бөгөөд аль ч төрийн байгууллагатай холбогдоогүй. Ангилал бүр нэг санал болгох хариуцагчтай.",
-              "Demo organizations are fictional and not connected to any government body. Each category has one suggested owner.",
+              "Мэдээллийг хариуцах байгууллага, тэдгээрийн засварын багууд. Ангилал бүр нэг санал болгох хариуцагчтай.",
+              "The organizations that handle reports, and their repair units. Each category has one suggested owner.",
             )}
           </p>
         </div>
@@ -357,7 +357,7 @@ export function AdminOrganizations() {
               </div>
               {staff.length > 0 && (
                 <>
-                  <p className="mt-4 text-eyebrow font-[650] uppercase tracking-wide text-ink-subtle">{t("Демо ажилтан", "Demo staff")}</p>
+                  <p className="mt-4 text-eyebrow font-[650] uppercase tracking-wide text-ink-subtle">{t("Ажилтан", "Staff")}</p>
                   <p className="mt-1 text-small text-ink-muted">{staff.map((s) => s.name).join(", ")}</p>
                 </>
               )}

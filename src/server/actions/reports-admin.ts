@@ -1,8 +1,7 @@
 "use server";
 
 // What the consoles do to a report: set its priority, assign it, move it through its lifecycle.
-// Each action replaces the demo function of the same name in src/lib/domain/actions.ts and
-// returns the same error codes. The lifecycle rules themselves stay in src/lib/domain/lifecycle.ts.
+// The lifecycle rules themselves are in src/lib/domain/lifecycle.ts, shared with the screens.
 import { and, eq } from "drizzle-orm";
 import { auditEvents, organizations, organizationUnits, reports, reportStatusEvents } from "@/db/schema";
 import { checkTransition } from "@/lib/domain/lifecycle";

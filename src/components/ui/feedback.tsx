@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState } fro
 import { CircleCheck, CircleX, Info, TriangleAlert, X, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useT } from "@/lib/i18n";
+import { useStore } from "@/lib/store";
 
 type Tone = "info" | "success" | "warning" | "danger";
 
@@ -51,8 +52,11 @@ export function Banner({
   );
 }
 
+/** "Sample data" marker. Shown only on a demonstration deployment (DEMO_LOGIN=true on the server). */
 export function SampleDataPill({ className }: { className?: string }) {
   const { t } = useT();
+  const { server } = useStore();
+  if (!server.demoLogin) return null;
   return (
     <span
       className={cn(
@@ -61,7 +65,7 @@ export function SampleDataPill({ className }: { className?: string }) {
       )}
     >
       <Info aria-hidden className="size-3.5" strokeWidth={2} />
-      <b className="font-[650]">{t("Демо өгөгдөл", "Sample data")}</b>
+      <b className="font-[650]">{t("Жишээ өгөгдөл", "Sample data")}</b>
       <span className="hidden sm:inline">· {t("бодит мэдээлэл биш", "not real reports")}</span>
     </span>
   );

@@ -34,8 +34,8 @@ export function AdminOverview() {
   const [range, setRange] = useState<"1" | "7" | "30">("7");
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "priority", dir: "desc" });
   const days = Number(range) as 1 | 7 | 30;
-  // With a server these numbers are counted in SQL; until they arrive (and in the browser-only
-  // demo) the same definitions run here on the loaded reports.
+  // These numbers are counted in SQL; until they arrive the same definitions run here on the
+  // loaded reports.
   const dashboard = useDashboard("admin", days);
 
   const visible = useMemo(() => state.reports.filter((r) => r.visibility === "visible"), [state.reports]);
@@ -71,17 +71,14 @@ export function AdminOverview() {
 
   return (
     <div className="mx-auto max-w-[1280px] space-y-6 px-4 py-6 md:px-6 lg:px-8">
-      <Banner tone="warning" title={t("Демо өгөгдөл — бодит мэдээлэл биш", "Sample data — not real reports")}>
-        {server.configured
-          ? t(
-              "Жишээ мэдээллээр эхэлсэн нийтийн өгөгдлийн сан. Өөр төхөөрөмжөөс хийсэн өөрчлөлт 15 секундын дотор энд харагдана.",
-              "A shared database that starts from sample reports. Changes made on another device appear here within 15 seconds.",
-            )
-          : t(
-              "Энэ хуудас таны хөтөчид хадгалагдсан демо өгөгдлийг харуулна. Өөр табаас хийсэн өөрчлөлт шууд тусна.",
-              "This page shows demo data stored in your browser. Changes made in another tab appear here immediately.",
-            )}
-      </Banner>
+      {server.demoLogin && (
+        <Banner tone="warning" title={t("Жишээ өгөгдөл — бодит мэдээлэл биш", "Sample data — not real reports")}>
+          {t(
+            "Энэ бол жишээ мэдээллээр дүүргэсэн танилцуулгын хувилбар. Өөр төхөөрөмжөөс хийсэн өөрчлөлт 15 секундын дотор энд харагдана.",
+            "This is a demonstration deployment filled with sample reports. Changes made on another device appear here within 15 seconds.",
+          )}
+        </Banner>
+      )}
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -91,7 +88,7 @@ export function AdminOverview() {
         <div className="flex flex-wrap items-center gap-3">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-caption font-[600] text-accent">
             <span aria-hidden className="size-2 rounded-full bg-accent" />
-            {server.configured ? t("Шууд · 15 сек тутам", "Live · every 15 s") : t("Шууд · энэ хөтөч", "Live · this browser")}
+            {t("Шууд · 15 сек тутам", "Live · every 15 s")}
           </span>
           <SampleDataPill />
           <SegmentedControl

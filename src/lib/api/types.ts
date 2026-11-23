@@ -16,7 +16,7 @@ export interface SessionUser {
   /** Database ids (uuid) of the user's organization and unit, for API calls. */
   organizationId: string | null;
   unitId: string | null;
-  /** The same as slugs ("org-road", "unit-road-a"), which are the ids the demo data uses. */
+  /** The same as slugs ("org-road", "unit-road-a"), which is how the API identifies them. */
   organizationSlug: string | null;
   unitSlug: string | null;
 }
@@ -26,14 +26,16 @@ export interface MeResponse {
   configured: boolean;
   /** Google sign-in is set up (client id and secret present). */
   google: boolean;
-  /** The demo role picker is enabled (DEMO_LOGIN=true). */
+  /** A demonstration deployment (DEMO_LOGIN=true): one-click sample users, and "sample data" notices. */
   demoLogin: boolean;
+  /** The sample users the login page offers. Only present when `demoLogin` is true. */
+  sampleUsers?: User[];
   user: SessionUser | null;
 }
 
 /* ---- GET /api/v1/categories ---- */
 
-/** The demo's `CategoryDef`, plus how many reports use each category and subcategory. */
+/** The `CategoryDef`, plus how many reports use each category and subcategory. */
 export interface ApiSubcategory extends SubcategoryDef {
   reportCount: number;
 }
@@ -60,7 +62,7 @@ export interface UploadedPhoto {
 /* ---- GET /api/v1/reports, /api/v1/admin/reports, /api/v1/staff/reports ---- */
 
 /**
- * Reports in the demo's `Report` shape, already cut down to what the caller may see: other
+ * Reports in the `Report` shape, already cut down to what the caller may see: other
  * people's ids are replaced by "" (see src/server/queries/reports.ts).
  */
 export interface ReportsResponse {
@@ -122,7 +124,7 @@ export interface StaffResponse {
 /* ---- GET /api/v1/admin/activity, /api/v1/staff/activity ---- */
 
 /**
- * Recent events on the reports the caller may see, newest first, in the demo's `ActivityEvent`
+ * Recent events on the reports the caller may see, newest first, in the `ActivityEvent`
  * shape (organizations by slug). Nobody is identified: an event says what happened, and for
  * a status change which organization (or "FixUB team") acted, never which person.
  */

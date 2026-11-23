@@ -16,7 +16,7 @@ export interface Membership {
 }
 
 /**
- * The signed-in user, as the server sees them. It has the same shape as the demo's `User`
+ * The signed-in user, as the server sees them. It has the same shape as the `User`
  * (id, name, role, organizationId, unitId), so the rules in `src/lib/domain` (checkTransition,
  * canWorkOn, …) take an Actor unchanged.
  *

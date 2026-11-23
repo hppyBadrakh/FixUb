@@ -5,8 +5,7 @@ import { withDb } from "./db";
 import { AppError, toErrorBody, type ErrorCode } from "./errors";
 
 /**
- * What every server action returns. Same shape as the demo's `run(...)` result, so screens keep
- * their `if (!res.ok) … res.error` handling.
+ * What every server action returns. Screens handle it as `if (!res.ok) … res.error`.
  */
 export type ActionResult<T = object> =
   | ({ ok: true } & T)

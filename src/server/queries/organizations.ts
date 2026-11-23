@@ -6,7 +6,7 @@ import type { Organization, User } from "@/lib/types";
 
 /**
  * Every organization with its units and the categories it is the suggested owner of, in the
- * demo's `Organization` shape. Ids are slugs ("org-road", "unit-road-a"). Public: these names
+ * `Organization` shape. Ids are slugs ("org-road", "unit-road-a"). Public: these names
  * appear on every report's timeline.
  */
 export async function listOrganizations(db: Db | Tx): Promise<Organization[]> {

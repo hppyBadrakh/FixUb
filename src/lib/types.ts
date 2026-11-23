@@ -167,15 +167,21 @@ export interface ActivityEvent {
   organizationId?: string;
 }
 
-export interface DemoState {
-  schema: 2;
-  seededAt: number;
-  seq: number;
+/** What the screens show: the part of the data this user may see (see src/lib/store.tsx). */
+export interface AppState {
   reports: Report[];
   organizations: Organization[];
   categories: CategoryDef[];
+  /** For admins: who works for which organization. Empty for everyone else. */
   users: User[];
   activity: ActivityEvent[];
+}
+
+/** The sample data set (src/lib/data/seed.ts), which `npm run db:seed` loads into Postgres. */
+export interface DemoState extends AppState {
+  schema: 2;
+  seededAt: number;
+  seq: number;
 }
 
 export interface LngLat {

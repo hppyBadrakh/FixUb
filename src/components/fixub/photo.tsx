@@ -1,38 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ImageIcon } from "lucide-react";
 import { photoUrl } from "@/lib/api/photos";
-import { getPhoto } from "@/lib/data/photoStore";
 import { ICONS } from "@/lib/meta";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/cn";
 import { useT } from "@/lib/i18n";
 import type { CategorySlug } from "@/lib/types";
 
-/**
- * Where to load a photo from. With a server it is `/api/v1/photos/{id}`; in the browser-only
- * demo it is an object URL for the photo in IndexedDB, revoked on unmount.
- */
+/** Where a stored photo is loaded from: `/api/v1/photos/{id}`. */
 export function usePhotoUrl(id: string | undefined) {
-  const { server } = useStore();
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    if (!id || server.configured) return;
-    let alive = true;
-    let made: string | null = null;
-    getPhoto(id).then((blob) => {
-      if (!alive || !blob) return;
-      made = URL.createObjectURL(blob);
-      setUrl(made);
-    });
-    return () => {
-      alive = false;
-      if (made) URL.revokeObjectURL(made);
-      setUrl(null);
-    };
-  }, [id, server.configured]);
-  return server.configured && id ? photoUrl(id) : url;
+  return id ? photoUrl(id) : null;
 }
 
 export function Photo({
@@ -51,7 +30,7 @@ export function Photo({
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   if (!url) return <NoPhoto category={category} className={className} loading />;
   if (failedUrl === url) return <NoPhoto category={category} className={className} />;
-  // eslint-disable-next-line @next/next/no-img-element -- an object URL or our own photo endpoint, not optimizable by next/image
+  // eslint-disable-next-line @next/next/no-img-element -- our own photo endpoint, which needs the session cookie
   return <img src={url} alt={alt} className={cn("object-cover", className)} onError={() => setFailedUrl(url)} />;
 }
 

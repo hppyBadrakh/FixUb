@@ -115,8 +115,8 @@ export const ICONS: Record<IconKey, LucideIcon> = {
 const sub = (id: string, mn: string, en: string): SubcategoryDef => ({ id, name: { mn, en } });
 
 /**
- * Initial category tree. It lives in demo state, so admins can rename, add, remove and reorder
- * categories and subcategories at /admin/categories.
+ * The category tree the seed starts from. In the database admins can rename, add, remove and
+ * reorder categories and subcategories at /admin/categories.
  */
 export const DEFAULT_CATEGORIES: CategoryDef[] = [
   {

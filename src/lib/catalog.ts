@@ -1,4 +1,4 @@
-// Lookups over the editable category tree in demo state.
+// Lookups over the category tree, which admins edit at /admin/categories.
 import type { LucideIcon } from "lucide-react";
 import { ICONS } from "./meta";
 import type { CategoryDef, Lang, SubcategoryDef } from "./types";

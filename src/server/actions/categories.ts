@@ -2,18 +2,18 @@
 
 // REFERENCE EXAMPLE — a write. Copy this shape for every server action:
 //
-//   1. Zod        validate the input (shape, lengths, enums). Field names match the demo action.
+//   1. Zod        validate the input (shape, lengths, enums).
 //   2. getActor() who is calling, then requireRole / requireOrgMember. Never trust the UI.
 //      Then rateLimit(): every write is counted per user (limits in src/server/rate-limit.ts).
-//   3. Rules      the same pure functions the demo used, from src/lib/domain.
+//   3. Rules      the pure functions in src/lib/domain, which the screens use too.
 //   4. Postgres   read what the rules need and write, all inside ONE transaction.
 //
-// It replaces the demo's `saveCategories(state, user, categories)` in src/lib/domain/actions.ts
-// and returns the same `{ ok: false, error }` codes, so the screen's error handling is unchanged.
+// Every action answers `{ ok: true, … }` or `{ ok: false, error }` with a code the screens
+// have a text for (src/server/errors.ts).
 import { and, eq, inArray, notInArray } from "drizzle-orm";
 import * as z from "zod";
 import { auditEvents, categories, reports, subcategories } from "@/db/schema";
-import { checkCategoryTree } from "@/lib/domain/actions";
+import { checkCategoryTree } from "@/lib/domain/rules";
 import { ICON_KEYS } from "@/lib/api/schemas";
 import { action } from "@/server/action";
 import { getActor, requireRole } from "@/server/actor";
@@ -47,7 +47,7 @@ export async function saveCategories(input: unknown) {
     const admin = requireRole(await getActor(db), "admin");
     await rateLimit(db, admin, "console.write");
 
-    /* 3. Rules from src/lib/domain: the same check the demo ran. */
+    /* 3. Rules from src/lib/domain: the same check the editor runs before sending. */
     const problem = checkCategoryTree(input.categories);
     if (problem) throw new AppError(problem);
 
