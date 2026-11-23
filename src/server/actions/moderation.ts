@@ -6,6 +6,7 @@ import * as z from "zod";
 import { auditEvents, moderationFlags, reports } from "@/db/schema";
 import { action } from "@/server/action";
 import { getActor, requireRole } from "@/server/actor";
+import { notify } from "@/server/notifications";
 import { rateLimit } from "@/server/rate-limit";
 import { lockReport } from "@/server/report-rules";
 import { idSchema } from "@/server/schemas";
@@ -48,6 +49,9 @@ export async function moderateReport(input: unknown) {
         targetId: report.id,
         metadata: { flags: handled.length },
       });
+      if (visibility !== report.visibility) {
+        await notify(tx, [report.reporterId], visibility === "hidden" ? "report.hidden" : "report.restored", report.id, {}, admin.id);
+      }
       return { undo: { reportId: report.id, visibility: report.visibility, flagIds: handled.map((f) => f.id) } };
     });
   });

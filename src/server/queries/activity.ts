@@ -11,16 +11,15 @@ import { FIXUB_TEAM, SYSTEM } from "./reports";
 //
 //   report_status_events   "created" (the first event) and "status"
 //   audit_events           "assigned", "prioritized", "hidden" (by an admin or automatically
-//                          on the third flag), "restored", and Undo of either
+//                          on the third flag), "restored", Undo of either, and "disputed"
 //   report_confirmations   "confirmed" (me too)
 //   moderation_flags       "flagged": admins only, like the flags themselves
 //
 // Nobody is identified: no user ids, and actors are labelled like on the public timeline
-// ("Road Maintenance", "FixUB team", "System"). "Disputed" (a verdict swing) is not
-// recorded anywhere yet, so it doesn't appear.
+// ("Road Maintenance", "FixUB team", "System").
 
 /** The audit actions that are events on a report. */
-const FEED_ACTIONS = ["report.assign", "report.priority", "report.hide", "report.restore", "report.dismiss", "report.moderation_undo"];
+const FEED_ACTIONS = ["report.assign", "report.priority", "report.hide", "report.restore", "report.dismiss", "report.moderation_undo", "report.disputed"];
 
 export interface ActivityOptions {
   /** Which reports, e.g. a staff member's organization. Undefined = all, hidden ones included. */
@@ -103,6 +102,8 @@ export async function loadActivity(db: Db | Tx, { scope, limit, withFlags = fals
       case "report.restore":
       case "report.dismiss":
         return [{ ...event, type: "restored" }];
+      case "report.disputed":
+        return [{ ...event, type: "disputed", actorLabel: undefined }];
       case "report.moderation_undo":
         return [{ ...event, type: meta.visibility === "hidden" ? "hidden" : "restored" }];
       default:

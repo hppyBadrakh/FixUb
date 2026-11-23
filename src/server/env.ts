@@ -18,6 +18,11 @@ export function serverEnv() {
     google: googleClientId && googleClientSecret ? { clientId: googleClientId, clientSecret: googleClientSecret } : null,
     /** A demonstration deployment: sample users on the login page. Only the exact string "true" enables it. */
     demoLogin: e.DEMO_LOGIN === "true",
+    /**
+     * REVIEW_BEFORE_PUBLIC=true: a new report is only public once an admin has reviewed it (set
+     * its priority). Until then only its reporter, admins and assigned staff see it.
+     */
+    reviewBeforePublic: e.REVIEW_BEFORE_PUBLIC === "true",
     /** Emails that are always admins (ADMIN_EMAILS, comma-separated), lower case. */
     adminEmails: (e.ADMIN_EMAILS ?? "")
       .split(",")

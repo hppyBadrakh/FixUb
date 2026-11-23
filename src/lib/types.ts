@@ -142,6 +142,13 @@ export interface Report {
   statusChangedAt: number;
   version: number;
   timeline: TimelineEvent[];
+  /** Since when more people say "still broken" than "fixed" about the current resolution. */
+  disputedAt?: number;
+  /**
+   * When an open report should be resolved by (priority decision + RESPONSE_TARGET_DAYS).
+   * Only sent to admins and the assigned organization's staff.
+   */
+  dueAt?: number;
 }
 
 export type ActivityType =

@@ -6,6 +6,7 @@ import { photoBlobs, reportImages, reports } from "@/db/schema";
 import type { UploadedPhoto } from "@/lib/api/types";
 import { LIMITS } from "@/lib/meta";
 import { AppError } from "./errors";
+import { isPublic } from "./queries/reports";
 
 // Photos: the bytes live in Cloudflare R2 (binding `PHOTOS`), one row per photo in
 // `report_images`. A deployment without the binding keeps the bytes in Postgres instead
@@ -186,8 +187,9 @@ export async function attachCompletionPhoto(
 
 /**
  * The bytes of a photo, if this person may see it:
- * - attached to a visible report: everyone, signed in or not;
- * - not attached yet, or on a hidden report: the uploader and admins.
+ * - attached to a public report: everyone, signed in or not;
+ * - not attached yet, or on a report that isn't public (hidden, or not reviewed yet where
+ *   REVIEW_BEFORE_PUBLIC is on): the uploader and admins.
  * Everything else is `not_found` (404), so a hidden photo can't be told from a missing one.
  */
 export async function loadPhoto(
@@ -202,15 +204,16 @@ export async function loadPhoto(
       contentType: reportImages.contentType,
       uploadedBy: reportImages.uploadedBy,
       visibility: reports.visibility,
+      priority: reports.priority,
     })
     .from(reportImages)
     .leftJoin(reports, eq(reports.id, reportImages.reportId))
     .where(eq(reportImages.id, id));
   if (!photo) throw new AppError("not_found");
 
-  const isPublic = photo.visibility === "visible";
+  const shown = photo.visibility !== null && isPublic({ visibility: photo.visibility, priority: photo.priority });
   const isInsider = !!actor && (actor.role === "admin" || actor.id === photo.uploadedBy);
-  if (!isPublic && !isInsider) throw new AppError("not_found");
+  if (!shown && !isInsider) throw new AppError("not_found");
 
   const object = await readPhoto(db, photo.storageKey);
   if (!object) throw new AppError("not_found");

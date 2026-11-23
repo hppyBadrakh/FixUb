@@ -13,7 +13,7 @@ import { useDashboard } from "@/lib/api/dashboard";
 import { ageBuckets, dailySeries, isOpen, summarize } from "@/lib/domain/metrics";
 import { formatHours } from "@/lib/format";
 import { useT } from "@/lib/i18n";
-import { OPEN_STATUSES } from "@/lib/meta";
+import { OPEN_STATUSES, RESPONSE_TARGET_DAYS } from "@/lib/meta";
 import { useNow, useStore } from "@/lib/store";
 
 export function deltaOf(cur: number | null, prev: number | null, goodWhen: "up" | "down", comparison: string, format: (n: number) => string = String) {
@@ -48,6 +48,8 @@ export function AdminOverview() {
     [visible, sort, lang, catalog],
   );
   const openReports = useMemo(() => visible.filter(isOpen), [visible]);
+  const overdue = openReports.filter((r) => r.dueAt && now > r.dueAt).length;
+  const disputed = visible.filter((r) => r.status === "resolved" && r.disputedAt).length;
   const flagged = dashboard?.flagged ?? state.reports.filter((r) => r.flags.some((f) => f.status === "open")).length;
 
   if (!ready) return <PageSkeleton />;
@@ -144,10 +146,14 @@ export function AdminOverview() {
           />
           <KpiCard
             icon={TriangleAlert}
-            label={t("14 хоногоос удсан", "Open > 14 days")}
-            value={s.openOver14}
-            attention={s.openOver14 > 0}
-            definition={t("Хугацааны норм тогтоогоогүй тул “хоцорсон” гэхгүй.", "No SLA deadlines are configured, so nothing is “overdue”.")}
+            label={t("Хугацаа хэтэрсэн", "Overdue")}
+            value={overdue}
+            attention={overdue > 0}
+            href="/admin/reports"
+            definition={t(
+              `Ач холбогдлын зорилтот хугацаа хэтэрсэн (яаралтай ${RESPONSE_TARGET_DAYS.critical}, өндөр ${RESPONSE_TARGET_DAYS.high}, дунд ${RESPONSE_TARGET_DAYS.medium}, бага ${RESPONSE_TARGET_DAYS.low} хоног). 14 хоногоос удсан: ${s.openOver14}.`,
+              `Past the target for its priority (critical ${RESPONSE_TARGET_DAYS.critical}, high ${RESPONSE_TARGET_DAYS.high}, medium ${RESPONSE_TARGET_DAYS.medium}, low ${RESPONSE_TARGET_DAYS.low} days). Open over 14 days: ${s.openOver14}.`,
+            )}
           />
         </div>
       </section>
@@ -238,6 +244,15 @@ export function AdminOverview() {
         </Card>
       </div>
 
+      {disputed > 0 && (
+        <Link href="/admin/reports" className="flex items-center gap-3 rounded-md border border-line bg-surface p-4 hover:border-line-strong">
+          <TriangleAlert aria-hidden className="size-5 text-warning" />
+          <span className="flex-1 text-label font-[600]">
+            {t(`Шийдвэрлэсэн ${disputed} мэдээллийг иргэд засаагүй гэж үзэж байна`, `Citizens say ${disputed} resolved report${disputed > 1 ? "s are" : " is"} still broken`)}
+          </span>
+          <List aria-hidden className="size-5 text-ink-muted" />
+        </Link>
+      )}
       {flagged > 0 && (
         <Link href="/admin/moderation" className="flex items-center gap-3 rounded-md border border-line bg-surface p-4 hover:border-line-strong">
           <Flag aria-hidden className="size-5 text-danger" />

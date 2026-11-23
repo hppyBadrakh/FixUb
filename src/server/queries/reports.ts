@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import {
   auditEvents,
@@ -15,9 +15,10 @@ import {
   subcategories,
   users,
 } from "@/db/schema";
-import { ROLE_LABEL } from "@/lib/meta";
+import { OPEN_STATUSES, RESPONSE_TARGET_DAYS, ROLE_LABEL } from "@/lib/meta";
 import type { Bi, Flag, Report, TimelineEvent } from "@/lib/types";
 import type { Actor } from "@/server/actor";
+import { serverEnv } from "@/server/env";
 
 // Reports as the screens read them: the `Report` shape (src/lib/types.ts), built for one
 // viewer. What a viewer must not learn is left out here, on the server:
@@ -27,7 +28,7 @@ import type { Actor } from "@/server/actor";
 //   everyone else's, so counts and "did I already…" both work.
 // - `priorityDecision` (who decided, the internal note) is only for admins and the staff of the
 //   organization the report is assigned to.
-// - `flags` are only for admins.
+// - `flags` are only for admins, `dueAt` (the response target) only for admins and assigned staff.
 //
 // Organizations and units are identified by their slug ("org-road"), categories too ("roads").
 
@@ -40,7 +41,21 @@ export const SYSTEM: Bi = { mn: "Систем", en: "System" };
 /** Lists are capped so one request can't read the whole table forever. Newest first unless asked otherwise. */
 const MAX_REPORTS = 1000;
 
+/** Not hidden by moderation. What the consoles count. */
 export const whereVisible = eq(reports.visibility, "visible");
+
+/**
+ * What everyone may see: not hidden and, where REVIEW_BEFORE_PUBLIC is on, already reviewed by
+ * an admin (it has a priority).
+ */
+export function wherePublic(): SQL {
+  return serverEnv().reviewBeforePublic ? and(whereVisible, isNotNull(reports.priority))! : whereVisible;
+}
+
+/** The same rule for one row already read from the database. */
+export function isPublic(report: { visibility: string; priority: string | null }): boolean {
+  return report.visibility === "visible" && (!serverEnv().reviewBeforePublic || report.priority !== null);
+}
 
 /** Reports inside a map viewport (west, south, east, north), using the PostGIS index. */
 export function whereInBox([west, south, east, north]: readonly [number, number, number, number]): SQL {
@@ -91,6 +106,7 @@ export async function loadReports(
       createdAt: reports.createdAt,
       updatedAt: reports.updatedAt,
       statusChangedAt: reports.statusChangedAt,
+      disputedAt: reports.disputedAt,
     })
     .from(reports)
     .innerJoin(categories, eq(categories.id, reports.categoryId))
@@ -235,6 +251,11 @@ export async function loadReports(
       updatedAt: r.updatedAt.getTime(),
       statusChangedAt: r.statusChangedAt.getTime(),
       version: r.version,
+      disputedAt: r.disputedAt?.getTime(),
+      dueAt:
+        internal && r.priority && r.prioritySetAt && OPEN_STATUSES.includes(r.status)
+          ? r.prioritySetAt.getTime() + RESPONSE_TARGET_DAYS[r.priority] * 864e5
+          : undefined,
       timeline,
     };
   });
@@ -248,12 +269,12 @@ export async function loadReports(
 export async function loadReport(db: Db | Tx, viewer: Actor | null, id: string): Promise<Report | null> {
   if (!UUID.test(id)) return null;
   const [row] = await db
-    .select({ visibility: reports.visibility, reporterId: reports.reporterId, organizationId: reports.assignedOrganizationId })
+    .select({ visibility: reports.visibility, priority: reports.priority, reporterId: reports.reporterId, organizationId: reports.assignedOrganizationId })
     .from(reports)
     .where(eq(reports.id, id));
   if (!row) return null;
   const allowed =
-    row.visibility === "visible" ||
+    isPublic(row) ||
     (!!viewer &&
       (viewer.role === "admin" ||
         row.reporterId === viewer.id ||

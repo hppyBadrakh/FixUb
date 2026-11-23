@@ -84,6 +84,7 @@ export const ACTIONS: Record<string, ActionRule> = {
   "categories/saveCategories": { allowed: ["admin"], input: currentCategoryTree },
 
   "account/acceptTerms": { allowed: ANY_ROLE, input: () => ({ version: CONSENT_VERSION }) },
+  "account/markNotificationsRead": { allowed: ANY_ROLE, input: () => ({}) },
 
   /* ---- citizen side: any signed-in user ---- */
   "reports-citizen/createReport": {
@@ -106,8 +107,12 @@ export const ACTIONS: Record<string, ActionRule> = {
   },
   "reports-citizen/setVerdict": {
     allowed: ANY_ROLE,
-    input: onReport({ status: "resolved" }, { verdict: "fixed" }),
-    refusals: [{ name: "a report that isn't resolved", as: "citizen", input: onReport({}, { verdict: "fixed" }), error: "not_resolved" }],
+    // The caller's own resolved report: only the people a report concerns may answer.
+    input: async (persona) => ({ reportId: await makeReport({ status: "resolved", reporter: persona === "signedOut" ? "citizen" : persona }), verdict: "fixed" }),
+    refusals: [
+      { name: "a report that isn't resolved", as: "citizen", input: onReport({}, { verdict: "fixed" }), error: "not_resolved" },
+      { name: "a report you neither filed nor said “me too” on", as: "citizen", input: onReport({ status: "resolved" }, { verdict: "not_fixed" }), error: "forbidden" },
+    ],
   },
   "reports-citizen/flagReport": {
     allowed: ANY_ROLE,
@@ -185,6 +190,7 @@ export const ROUTES: Record<string, RouteRule> = {
   categories: { allowed: "public" },
   me: { allowed: "public" },
   organizations: { allowed: "public" },
+  notifications: { allowed: ANY_ROLE },
   statistics: { allowed: "public" },
   reports: {
     allowed: "public",

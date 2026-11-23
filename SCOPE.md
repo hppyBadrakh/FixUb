@@ -24,7 +24,7 @@ FixUB is the middleman: it receives, triages, routes and publishes.
 ## Out of scope (current)
 
 - Any connection to a real government body. No organization has agreed to act on reports yet; the sample organizations are fictional.
-- Email, SMS or push notifications.
+- Email, SMS or push notifications (in-app notifications exist).
 - Emergency handling. FixUB is not an emergency service.
 - Proof that a photo is genuine. Camera-only capture discourages abuse and can't guarantee it.
 
@@ -46,7 +46,7 @@ Staff who open another organization's report get "doesn't exist".
 2. **Duplicate check.** Nearby similar reports are shown. The citizen is warned, not blocked.
 3. **Triage.** An admin sets the priority (low, medium, high or critical, with an optional internal note) and assigns an organization and unit. The category suggests the owner.
 4. **Work.** Staff move the report through the lifecycle and add public notes. A completion photo is optional.
-5. **Verdict.** After `resolved`, users answer "fixed" or "not fixed". A new resolution starts a fresh round of answers. When "not fixed" outnumbers "fixed", a `disputed` event is logged.
+5. **Verdict.** After `resolved`, the reporter and the people who said "me too" answer "fixed" or "not fixed". A new resolution starts a fresh round of answers. When "not fixed" outnumbers "fixed", the report is marked disputed and the organization's manager and the admins are notified.
 6. **Reopen.** A manager moves a `resolved` report back to `investigating`. An admin can reopen a `closed` report.
 7. **Moderation.** Any user can flag a report. Three open flags hide it. Admins hide, restore or dismiss.
 8. **Reporting.** Admins review statistics and the activity feed.
@@ -73,13 +73,12 @@ Rules:
 
 ## Known gaps (to fix)
 
-- A majority of "not fixed" verdicts only logs an event. It should reopen the report or alert the manager.
-- Any signed-in user can give a verdict, not only the reporter.
-- Reports are public with no confirmation step.
-- No notifications, overdue timers or auto-close.
+- Notifications are in the app only (the bell). There is no email, SMS or push.
+- A dispute ("still broken" outnumbers "fixed") alerts the manager and admins; it does not reopen the report by itself.
+- Overdue is shown in the consoles from fixed targets per priority. Nothing escalates or closes automatically.
+- Review before publication exists as a switch (`REVIEW_BEFORE_PUBLIC`) and is off by default: decide it before real use.
 - No "awaiting reply" or "unrouted" status.
 - Priority is shown on public pages. Decide whether it should stay public.
-- A "disputed" event (when "not fixed" overtakes "fixed") is not recorded anywhere yet.
 
 ## Next steps
 

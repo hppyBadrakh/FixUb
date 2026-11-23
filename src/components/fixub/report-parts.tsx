@@ -194,6 +194,8 @@ export function CitizenSignals({
   if (report.status === "resolved") {
     const { fixed, notFixed } = tally(report.feedback);
     const mine = report.feedback.find((f) => f.userId === userId)?.verdict;
+    // The people the report concerns: its reporter and those who said "me too".
+    const mayAnswer = isReporter || (!!userId && report.confirmations.includes(userId));
     return (
       <div className="rounded-md border border-line bg-surface p-4">
         <p className="text-title-3 font-[600]">{t("Үнэхээр зассан уу?", "Is it actually fixed?")}</p>
@@ -203,24 +205,24 @@ export function CitizenSignals({
             "The organization marked this resolved. Your answer is shown publicly as a count; it does not change the official status.",
           )}
         </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button
-            icon={CircleCheck}
-            pressed={mine === "fixed"}
-            disabled={!signedIn}
-            onClick={() => onVerdict(mine === "fixed" ? null : "fixed")}
-          >
-            {t("Зассан", "Fixed")}
-          </Button>
-          <Button
-            icon={CircleX}
-            pressed={mine === "not_fixed"}
-            disabled={!signedIn}
-            onClick={() => onVerdict(mine === "not_fixed" ? null : "not_fixed")}
-          >
-            {t("Засаагүй хэвээр", "Still broken")}
-          </Button>
-        </div>
+        {(mayAnswer || !signedIn) && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button icon={CircleCheck} pressed={mine === "fixed"} disabled={!signedIn} onClick={() => onVerdict(mine === "fixed" ? null : "fixed")}>
+              {t("Зассан", "Fixed")}
+            </Button>
+            <Button icon={CircleX} pressed={mine === "not_fixed"} disabled={!signedIn} onClick={() => onVerdict(mine === "not_fixed" ? null : "not_fixed")}>
+              {t("Засаагүй хэвээр", "Still broken")}
+            </Button>
+          </div>
+        )}
+        {signedIn && !mayAnswer && (
+          <p className="mt-3 text-small text-ink-muted">
+            {t(
+              "Зөвхөн мэдээлсэн хүн болон “Надад ч бас” дарсан хүмүүс хариулна.",
+              "Only the reporter and people who said “me too” can answer.",
+            )}
+          </p>
+        )}
         <p className="mt-3 text-small" aria-live="polite">
           <b className="text-metric tnum font-[600]">{fixed}</b> {t("зассан гэсэн", "say fixed")}
           <span className="mx-2 text-ink-subtle">·</span>

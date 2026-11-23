@@ -271,6 +271,12 @@ export const UB_CENTER: LngLat = { lng: 106.917, lat: 47.918 };
  */
 export const CONSENT_VERSION = "2026-11";
 
+/**
+ * How many days after the priority is set a report should be resolved. Past that, the consoles
+ * mark it overdue. Targets for the staff, not a promise shown to citizens.
+ */
+export const RESPONSE_TARGET_DAYS: Record<"low" | "medium" | "high" | "critical", number> = { critical: 2, high: 7, medium: 14, low: 30 };
+
 export const LIMITS = {
   descriptionMin: 10,
   descriptionMax: 1000,

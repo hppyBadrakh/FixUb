@@ -1,13 +1,16 @@
 // The report loop on the server: what each action changes, and what each kind of viewer then sees.
 import { afterAll, describe, expect, it } from "vitest";
 import { GET as adminReports } from "@/app/api/v1/admin/reports/route";
+import { GET as notificationsRoute } from "@/app/api/v1/notifications/route";
+import { GET as servePhoto } from "@/app/api/v1/photos/[id]/route";
 import { GET as listReports } from "@/app/api/v1/reports/route";
 import { GET as staffReports } from "@/app/api/v1/staff/reports/route";
 import { eq } from "drizzle-orm";
 import { users } from "@/db/schema";
 import { CONSENT_VERSION } from "@/lib/meta";
+import type { AppNotification, NotificationsResponse } from "@/lib/api/types";
 import type { Report, StatusTimelineEvent } from "@/lib/types";
-import { acceptTerms } from "@/server/actions/account";
+import { acceptTerms, markNotificationsRead } from "@/server/actions/account";
 import { withDb } from "@/server/db";
 import type { ActionResult } from "@/server/action";
 import { moderateReport, undoModeration } from "@/server/actions/moderation";
@@ -27,6 +30,14 @@ async function read(persona: Persona, handler: Handler | (() => Promise<Response
 }
 const find = async (persona: Persona, handler: Parameters<typeof read>[1], id: string, query = "") =>
   (await read(persona, handler, query)).find((r) => r.id === id);
+
+/** What the bell shows this persona about one report. */
+async function bell(persona: Persona, reportId?: string): Promise<{ unread: number; about: AppNotification[] }> {
+  const res = await as(persona, () => notificationsRoute());
+  expect(res.status).toBe(200);
+  const { notifications, unread } = ((await res.json()) as { data: NotificationsResponse }).data;
+  return { unread, about: notifications.filter((n) => n.reportId === reportId) };
+}
 
 function ok<T extends object>(result: ActionResult<T>): T {
   expect(result, JSON.stringify(result)).toMatchObject({ ok: true });
@@ -110,6 +121,7 @@ describe.skipIf(!hasDatabase)("the full loop: report → priority → assign →
   it("citizen reports; admin sets the priority and assigns it", async () => {
     id = ok((await create("citizen")).result).report.id;
     expect(await find("roadStaff", staffReports, id)).toBeUndefined();
+    ok(await as("otherCitizen", () => toggleMeToo({ reportId: id }))); // someone else sees the same problem
 
     ok(await as("admin", () => setPriority({ reportId: id, priority: "high", note: "Сургуулийн ойролцоо" })));
     ok(await as("admin", () => assignReport({ reportId: id, organizationId: "org-road", unitId: "unit-road-a" })));
@@ -128,6 +140,14 @@ describe.skipIf(!hasDatabase)("the full loop: report → priority → assign →
 
     expect((await find("roadStaff", staffReports, id))!.priorityDecision?.note).toBe("Сургуулийн ойролцоо");
     expect(await find("lightStaff", staffReports, id)).toBeUndefined();
+  });
+
+  it("gets a response target from its priority, shown to staff and admins only", async () => {
+    const forStaff = (await find("roadStaff", staffReports, id))!;
+    // High priority: 7 days after the decision.
+    expect(forStaff.dueAt).toBe(forStaff.priorityDecision!.at + 7 * 864e5);
+    expect((await find("admin", adminReports, id))!.dueAt).toBe(forStaff.dueAt);
+    expect((await find("citizen", listReports, id))!.dueAt).toBeUndefined();
   });
 
   it("staff work on it and resolve it with a completion photo", async () => {
@@ -168,12 +188,62 @@ describe.skipIf(!hasDatabase)("the full loop: report → priority → assign →
     expect((await find("signedOut", listReports, id))!.feedback).toHaveLength(1);
   });
 
+  it("only the people a report concerns may answer", async () => {
+    expect(await as("roadStaff", () => setVerdict({ reportId: id, verdict: "fixed" }))).toMatchObject({ ok: false, error: "forbidden" });
+    expect((await find("signedOut", listReports, id))!.feedback).toHaveLength(1);
+  });
+
+  it("when “still broken” overtakes “fixed”, the report is disputed and the manager and admin are told", async () => {
+    expect((await find("signedOut", listReports, id))!.disputedAt).toBeUndefined();
+    ok(await as("citizen", () => setVerdict({ reportId: id, verdict: "not_fixed" })));
+
+    const report = (await find("signedOut", listReports, id))!;
+    expect(report.status).toBe("resolved"); // the official status is the staff's to change
+    expect(report.disputedAt).toBeTypeOf("number");
+    expect((await bell("roadManager", id)).about.map((n) => n.type)).toContain("report.disputed");
+    expect((await bell("admin", id)).about.map((n) => n.type)).toContain("report.disputed");
+    expect((await bell("lightStaff", id)).about).toEqual([]);
+
+    // Told once per resolution, not on every further answer.
+    ok(await as("otherCitizen", () => setVerdict({ reportId: id, verdict: "not_fixed" })));
+    expect((await bell("roadManager", id)).about.filter((n) => n.type === "report.disputed")).toHaveLength(1);
+  });
+
   it("reopening needs the manager and a note, and starts a fresh round of answers", async () => {
     // Staff see the report but can't make the manager's move: the lifecycle answers as if it wasn't theirs.
     expect(await as("roadStaff", () => changeStatus({ reportId: id, to: "investigating", version: 4, note: "Дахин шалгая" }))).toMatchObject({ ok: false });
     ok(await as("roadManager", () => changeStatus({ reportId: id, to: "investigating", version: 4, note: "Дахин эвдэрсэн" })));
     ok(await as("roadStaff", () => changeStatus({ reportId: id, to: "resolved", version: 5 })));
-    expect((await find("citizen", listReports, id))!.feedback).toEqual([]);
+    const again = (await find("citizen", listReports, id))!;
+    expect(again.feedback).toEqual([]);
+    expect(again.disputedAt).toBeUndefined();
+  });
+
+  it("everyone involved was told what happened, and nobody about their own actions", async () => {
+    const reporter = await bell("citizen", id);
+    expect(reporter.about.every((n) => n.ownReport)).toBe(true);
+    expect(reporter.about.map((n) => `${n.type}${n.data.to ? `:${n.data.to as string}` : ""}`).reverse()).toEqual([
+      "report.reviewed",
+      "report.assigned",
+      "report.status:in_progress",
+      "report.status:resolved",
+      "report.status:investigating",
+      "report.status:resolved",
+    ]);
+    expect(JSON.stringify(reporter.about)).not.toMatch(/Бадрах|Бат-Эрдэнэ|Оюунчимэг/);
+
+    // Staff: the assignment. Their own status changes are not news to them.
+    const staff = await bell("roadStaff", id);
+    expect(staff.about.map((n) => n.type)).toEqual(["report.assigned"]);
+    expect(staff.about[0].ownReport).toBe(false);
+    // "Me too": asked each time it is resolved.
+    expect((await bell("otherCitizen", id)).about.map((n) => `${n.type}:${n.data.to as string}`)).toEqual(["report.status:resolved", "report.status:resolved"]);
+    expect((await bell("admin", id)).about.map((n) => n.type)).toEqual(["report.disputed"]);
+
+    expect(reporter.unread).toBeGreaterThanOrEqual(6);
+    ok(await as("citizen", () => markNotificationsRead({})));
+    expect((await bell("citizen", id)).unread).toBe(0);
+    expect((await bell("otherCitizen", id)).unread).toBeGreaterThan(0);
   });
 });
 
@@ -267,5 +337,45 @@ describe.skipIf(!hasDatabase)("queue filters and sorting", () => {
     expect(queue.some((r) => r.id === ours)).toBe(true);
     expect(queue.some((r) => r.id === theirs)).toBe(false);
     expect(queue.every((r) => r.organizationId === "org-road")).toBe(true);
+  });
+});
+
+describe.skipIf(!hasDatabase)("REVIEW_BEFORE_PUBLIC: a report is public only after an admin reviewed it", () => {
+  const before = process.env.REVIEW_BEFORE_PUBLIC;
+  afterAll(() => {
+    if (before === undefined) delete process.env.REVIEW_BEFORE_PUBLIC;
+    else process.env.REVIEW_BEFORE_PUBLIC = before;
+  });
+  afterAll(cleanUpReports);
+  afterAll(cleanUpPhotos);
+  afterAll(signOutEveryone);
+
+  it("is seen only by its reporter and the admins until it has a priority", async () => {
+    process.env.REVIEW_BEFORE_PUBLIC = "true";
+    const { input, result } = await create("citizen");
+    const id = ok(result).report.id;
+    const photo = (persona: Persona) =>
+      as(persona, () => servePhoto(new Request("http://localhost:3000/"), { params: Promise.resolve({ id: input.photoIds[0] }) })).then((r) => r.status);
+
+    expect(await find("signedOut", listReports, id)).toBeUndefined();
+    expect(await find("otherCitizen", listReports, id)).toBeUndefined();
+    expect(await photo("signedOut")).toBe(404);
+    expect(await as("otherCitizen", () => toggleMeToo({ reportId: id }))).toMatchObject({ ok: false, error: "not_found" });
+    expect(await as("otherCitizen", () => flagReport({ reportId: id, reason: "spam", details: "" }))).toMatchObject({ ok: false, error: "not_found" });
+
+    expect(await find("citizen", listReports, id, "?mine=1")).toMatchObject({ priority: null, visibility: "visible" });
+    expect(await photo("citizen")).toBe(200);
+    expect(await find("admin", adminReports, id)).toBeDefined();
+
+    ok(await as("admin", () => setPriority({ reportId: id, priority: "low", note: "" })));
+    expect(await find("signedOut", listReports, id)).toMatchObject({ priority: "low" });
+    expect(await photo("signedOut")).toBe(200);
+    expect((await bell("citizen", id)).about.map((n) => n.type)).toEqual(["report.reviewed"]);
+  });
+
+  it("without the switch a new report is public at once", async () => {
+    delete process.env.REVIEW_BEFORE_PUBLIC;
+    const id = ok((await create("citizen")).result).report.id;
+    expect(await find("signedOut", listReports, id)).toMatchObject({ priority: null });
   });
 });

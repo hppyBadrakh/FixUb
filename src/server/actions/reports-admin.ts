@@ -8,6 +8,7 @@ import { checkTransition } from "@/lib/domain/lifecycle";
 import { action } from "@/server/action";
 import { getActor, requireOrgMember, requireRole } from "@/server/actor";
 import { AppError } from "@/server/errors";
+import { followersOf, notify, staffOf } from "@/server/notifications";
 import { attachCompletionPhoto } from "@/server/photos";
 import { rateLimit } from "@/server/rate-limit";
 import { lockReport } from "@/server/report-rules";
@@ -32,6 +33,8 @@ export async function setPriority(input: unknown) {
         targetId: report.id,
         metadata: { priority: input.priority },
       });
+      // The first decision is the review: the reporter learns that someone has looked at it.
+      if (report.priority === null) await notify(tx, [report.reporterId], "report.reviewed", report.id, { priority: input.priority }, admin.id);
     });
     return {};
   });
@@ -70,6 +73,8 @@ export async function assignReport(input: unknown) {
         targetId: report.id,
         metadata: { organizationId: org.id, unitId },
       });
+      // The organization's people learn they have work; the reporter learns who has it.
+      await notify(tx, [...(await staffOf(tx, org.id)), report.reporterId], "report.assigned", report.id, { organizationId: input.organizationId }, admin.id);
     });
     return {};
   });
@@ -131,10 +136,16 @@ export async function changeStatus(input: unknown) {
           statusChangedAt: now,
           updatedAt: now,
           resolvedAt: input.to === "resolved" ? now : null,
+          // A new status answers the dispute, whichever way.
+          disputedAt: null,
           version: report.version + 1,
         })
         .where(eq(reports.id, report.id));
       if (input.photoId) await attachCompletionPhoto(tx, actor, { reportId: report.id, statusEventId: event.id }, input.photoId);
+
+      // The reporter follows every step; people who said "me too" are asked when it is resolved.
+      const followers = input.to === "resolved" ? await followersOf(tx, report.id) : [];
+      await notify(tx, [report.reporterId, ...followers], "report.status", report.id, { to: input.to, ...(closing ? { reason: input.closureReason } : {}) }, actor.id);
     });
     return {};
   });

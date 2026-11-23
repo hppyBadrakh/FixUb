@@ -54,7 +54,7 @@ function emptyDraft(requestId = uid("req")): Draft {
 }
 
 export function ReportFlow() {
-  const { ready, state, user, consented, act, catalog } = useStore();
+  const { ready, state, user, consented, server, act, catalog } = useStore();
   const { lang, t, pick: pickBi } = useT();
   const router = useRouter();
   const toast = useToast();
@@ -137,9 +137,12 @@ export function ReportFlow() {
             <CircleCheck aria-hidden className="size-6" strokeWidth={1.75} />
           </span>
           <h1 ref={headingRef} tabIndex={-1} className="mt-4 text-title-1 font-[650] outline-none">
-            {t("Таны мэдээлэл нийтлэгдлээ", "Your report is public now")}
+            {server.reviewBeforePublic ? t("Таны мэдээллийг хүлээн авлаа", "Your report was received") : t("Таны мэдээлэл нийтлэгдлээ", "Your report is public now")}
           </h1>
-          <p className="mt-2 text-body text-ink-muted">{t("Таны нэр хэзээ ч харагдахгүй.", "Your name is never shown.")}</p>
+          <p className="mt-2 text-body text-ink-muted">
+            {server.reviewBeforePublic && t("FixUB баг хянасны дараа нийтэд харагдана. ", "It becomes public once the FixUB team has reviewed it. ")}
+            {t("Таны нэр хэзээ ч харагдахгүй.", "Your name is never shown.")}
+          </p>
           <div className="mt-6 rounded-md border border-line bg-surface p-4">
             <p className="text-small text-ink-muted">{t("Хянах дугаар", "Tracking reference")}</p>
             <p className="text-metric font-[650] tnum">{done.ref}</p>
@@ -183,7 +186,11 @@ export function ReportFlow() {
         <div className="mx-auto max-w-[480px] px-4 py-10">
           <h1 className="text-title-2 font-[600]">{t("Эхлэхээс өмнө", "Before you start")}</h1>
           <ul className="mt-4 list-disc space-y-2 pl-5 text-body text-ink-muted">
-            <li>{t("Таны мэдээлэл илгээмэгц нийтэд нээлттэй болно: зураг, байршил, ангилал, тайлбар.", "Your report is public as soon as you send it: its photos, location, category and description.")}</li>
+            <li>
+              {server.reviewBeforePublic
+                ? t("Таны мэдээлэл FixUB баг хянасны дараа нийтэд нээлттэй болно: зураг, байршил, ангилал, тайлбар.", "Your report becomes public once the FixUB team has reviewed it: its photos, location, category and description.")
+                : t("Таны мэдээлэл илгээмэгц нийтэд нээлттэй болно: зураг, байршил, ангилал, тайлбар.", "Your report is public as soon as you send it: its photos, location, category and description.")}
+            </li>
             <li>{t("Таны нэр, имэйл хэзээ ч нийтэд харагдахгүй. Тэдгээрийг зөвхөн нэвтрэлтэд ашиглана.", "Your name and email are never shown publicly. They are only used to sign you in.")}</li>
             <li>{t("Хүний нүүр, машины дугаарыг зурагт оруулахгүй байхыг хичээнэ үү.", "Try to keep people's faces and number plates out of the photo.")}</li>
             <li>{t("Зохисгүй мэдээллийг хянагч нууж, давтан зөрчвөл бүртгэлийг хааж болно.", "Moderators may hide a report that breaks the rules, and block an account that keeps doing so.")}</li>
