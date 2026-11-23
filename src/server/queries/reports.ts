@@ -15,7 +15,7 @@ import {
   subcategories,
   users,
 } from "@/db/schema";
-import { ROLE_LABEL } from "@/lib/meta";
+import { LIMITS, OPEN_STATUSES, ROLE_LABEL } from "@/lib/meta";
 import type { Bi, Flag, Report, TimelineEvent } from "@/lib/types";
 import type { Actor } from "@/server/actor";
 
@@ -271,3 +271,44 @@ export const whereReportedBy = (userId: string) => eq(reports.reporterId, userId
 /** Reports assigned to any of these organizations (a staff member's queue). */
 export const whereAssignedTo = (organizationIds: string[]) =>
   organizationIds.length ? inArray(reports.assignedOrganizationId, organizationIds) : sql`false`;
+
+/** What the duplicate hint shows at most. */
+export const MAX_NEARBY = 5;
+
+/**
+ * Open reports of the same category within `LIMITS.duplicateRadiusM` metres of a point and newer
+ * than `LIMITS.duplicateDays` days, nearest first, for the "someone already reported this" hint
+ * (FR-004). Only visible reports are searched (the partial geography index needs that filter),
+ * and the viewer's own reports are left out: they can't "me too" their own.
+ */
+export async function findNearbyReports(
+  db: Db | Tx,
+  viewer: Actor | null,
+  { lng, lat, category }: { lng: number; lat: number; category: string },
+): Promise<{ report: Report; distance: number }[]> {
+  const point = sql`ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography`;
+  const geography = sql`${reports.location}::geography`;
+  const distance = sql<number>`ST_Distance(${geography}, ${point})`;
+  const near = await db
+    .select({ id: reports.id, distance })
+    .from(reports)
+    .where(
+      and(
+        whereVisible,
+        whereCategory(category),
+        inArray(reports.status, OPEN_STATUSES),
+        sql`${reports.createdAt} > now() - make_interval(days => ${LIMITS.duplicateDays})`,
+        sql`ST_DWithin(${geography}, ${point}, ${LIMITS.duplicateRadiusM})`,
+        viewer ? sql`${reports.reporterId} is distinct from ${viewer.id}` : undefined,
+      ),
+    )
+    .orderBy(asc(distance), asc(reports.id))
+    .limit(MAX_NEARBY);
+  if (!near.length) return [];
+
+  const loaded = new Map((await loadReports(db, viewer, inArray(reports.id, near.map((n) => n.id)))).map((r) => [r.id, r]));
+  return near.flatMap((n) => {
+    const report = loaded.get(n.id);
+    return report ? [{ report, distance: Math.round(Number(n.distance) * 10) / 10 }] : [];
+  });
+}

@@ -14,6 +14,8 @@ import { ReportMap, type PickValue } from "@/components/fixub/report-map";
 import { PriorityBadge, StatusBadge } from "@/components/fixub/status";
 import { cn } from "@/lib/cn";
 import { findDuplicateCandidates, uid } from "@/lib/domain/actions";
+import { fetchApi } from "@/lib/api/hooks";
+import type { NearbyResponse } from "@/lib/api/types";
 import { guessDistrict, inServiceArea } from "@/lib/domain/geo";
 import { useT } from "@/lib/i18n";
 import { DISTRICT_META, DISTRICT_ORDER, ICONS, LIMITS, STATUS_META } from "@/lib/meta";
@@ -54,7 +56,7 @@ function emptyDraft(requestId = uid("req")): Draft {
 }
 
 export function ReportFlow() {
-  const { ready, state, user, act, catalog } = useStore();
+  const { ready, state, user, act, catalog, server } = useStore();
   const { lang, t, pick: pickBi } = useT();
   const router = useRouter();
   const toast = useToast();
@@ -67,6 +69,9 @@ export function ReportFlow() {
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [confirmedDup, setConfirmedDup] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // With a server, the nearby reports come from /api/v1/reports/nearby when "Next" is tapped on the location step.
+  const [nearby, setNearby] = useState<NearbyResponse["candidates"]>([]);
+  const [checking, setChecking] = useState(false);
   const [done, setDone] = useState<Pick<Report, "id" | "ref"> | null>(null);
   const [placeQuery, setPlaceQuery] = useState("");
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -98,13 +103,15 @@ export function ReportFlow() {
 
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
   const places = useMemo(() => searchPlaces(placeQuery), [placeQuery]);
-  const duplicates = useMemo(
+  // Browser-only demo (no database): searched in the browser, as before.
+  const demoDuplicates = useMemo(
     () =>
-      draft.pick && draft.category
+      !server.configured && draft.pick && draft.category
         ? findDuplicateCandidates(state, { ...draft.pick, category: draft.category }, now).filter((c) => c.report.reporterId !== user?.id)
         : [],
-    [state, draft.pick, draft.category, now, user?.id],
+    [server.configured, state, draft.pick, draft.category, now, user?.id],
   );
+  const duplicates = server.configured ? nearby : demoDuplicates;
 
   if (!ready || !restored) return <PageSkeleton />;
 
@@ -215,12 +222,28 @@ export function ReportFlow() {
     return Object.keys(e).length === 0;
   };
 
-  const goNext = () => {
-    if (!validate(draft.step)) return;
+  const goNext = async () => {
+    if (checking || !validate(draft.step)) return;
     // After the location is confirmed, offer nearby open reports of the same kind (FR-004).
-    if (draft.step === 3 && duplicates.length && !showDuplicates) {
-      setShowDuplicates(true);
-      return;
+    if (draft.step === 3 && !showDuplicates) {
+      let found = duplicates;
+      if (server.configured && draft.pick && draft.category) {
+        setChecking(true);
+        try {
+          const { lng, lat } = draft.pick;
+          found = (await fetchApi<NearbyResponse>(`/api/v1/reports/nearby?lng=${lng}&lat=${lat}&category=${encodeURIComponent(draft.category)}`)).candidates;
+        } catch {
+          // The hint is advisory: a failed search must not stop anyone from reporting.
+          found = [];
+        } finally {
+          setChecking(false);
+        }
+        setNearby(found);
+      }
+      if (found.length) {
+        setShowDuplicates(true);
+        return;
+      }
     }
     setShowDuplicates(false);
     set({ step: Math.min(TOTAL, draft.step + 1) as Step });
@@ -304,7 +327,7 @@ export function ReportFlow() {
               {t("Буцах", "Back")}
             </Button>
             {draft.step < TOTAL ? (
-              <Button size="lg" variant="primary" fullWidth iconEnd={ArrowRight} onClick={goNext}>
+              <Button size="lg" variant="primary" fullWidth iconEnd={ArrowRight} loading={checking} onClick={goNext}>
                 {t("Үргэлжлүүлэх", "Continue")}
               </Button>
             ) : (

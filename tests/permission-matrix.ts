@@ -11,7 +11,7 @@ import { listCategories } from "@/server/queries/categories";
 import { listOrganizations } from "@/server/queries/organizations";
 import { PERSONAS, type Persona } from "./helpers/personas";
 import { jpeg, publicPhoto, rememberPhoto, uploadedBy } from "./helpers/photos";
-import { makeReport, newReportInput, rememberReport, type FixtureOptions } from "./helpers/reports";
+import { makeReport, newReportInput, PLACE, rememberReport, type FixtureOptions } from "./helpers/reports";
 
 type Lazy<T> = () => T | Promise<T>;
 /** Built for the persona who is about to call (a photo, for example, must be their own upload). */
@@ -166,6 +166,14 @@ export const ROUTES: Record<string, RouteRule> = {
     refusals: [
       { name: "asking for \"my reports\" without signing in", as: "signedOut", url: () => "/api/v1/reports?mine=1", status: 401 },
       { name: "a map box that isn't one", as: "citizen", url: () => "/api/v1/reports?bbox=1,2,x", status: 400 },
+    ],
+  },
+  "reports/nearby": {
+    allowed: "public",
+    url: () => `/api/v1/reports/nearby?lng=${PLACE.lng}&lat=${PLACE.lat}&category=roads`,
+    refusals: [
+      { name: "a point that isn't one", as: "citizen", url: () => "/api/v1/reports/nearby?lng=x&lat=1&category=roads", status: 400 },
+      { name: "no category", as: "signedOut", url: () => `/api/v1/reports/nearby?lng=${PLACE.lng}&lat=${PLACE.lat}`, status: 400 },
     ],
   },
   "reports/[id]": {

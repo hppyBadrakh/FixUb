@@ -67,6 +67,12 @@ export interface ReportsResponse {
   reports: Report[];
 }
 
+/* ---- GET /api/v1/reports/nearby ---- */
+export interface NearbyResponse {
+  /** Nearest first; `distance` in metres. */
+  candidates: { report: Report; distance: number }[];
+}
+
 /* ---- GET /api/v1/reports/{id} ---- */
 
 export interface ReportResponse {

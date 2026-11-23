@@ -5,23 +5,8 @@
 //   with a completion photo → the citizen confirms it is fixed
 //
 // Chromium runs with a fake camera (see playwright.config.ts), so the camera-only photo steps work.
-import { expect, test, type Browser, type Page } from "@playwright/test";
-import { signInAs, type DemoUser } from "./helpers";
-
-/** A fresh browser, in English, signed in as a demo user. */
-async function device(browser: Browser, user: DemoUser): Promise<Page> {
-  const context = await browser.newContext({ permissions: ["camera"] });
-  await context.addInitScript(() => window.localStorage.setItem("fixub-lang", "en"));
-  const page = await context.newPage();
-  await signInAs(page, user);
-  return page;
-}
-
-/** Presses the shutter once the (fake) camera is delivering frames. */
-async function takePhoto(page: Page) {
-  await expect.poll(() => page.locator("video").evaluate((v) => (v as HTMLVideoElement).videoWidth), { timeout: 20_000 }).toBeGreaterThan(0);
-  await page.getByRole("button", { name: "Take photo", exact: true }).click();
-}
+import { expect, test, type Page } from "@playwright/test";
+import { device, takePhoto } from "./helpers";
 
 const DESCRIPTION = `E2E: a pothole about a metre wide, cars swerve around it (${Date.now().toString(36)}).`;
 
@@ -49,7 +34,8 @@ test.describe.serial("full loop: report → priority → assign → resolve → 
     await citizen.getByLabel("Search a street or place").fill("Zaisan");
     await citizen.getByRole("button", { name: "Zaisan" }).click();
     await citizen.getByRole("button", { name: "Continue" }).click();
-    // Nearby open reports of the same kind may be offered first: this is a new one.
+    // Nearby open reports of the same kind may be offered first (a request to the server): this is a new one.
+    await expect(citizen.getByRole("heading", { name: "Is it one of these?" }).or(citizen.getByLabel("What's wrong?"))).toBeVisible();
     if (await citizen.getByRole("heading", { name: "Is it one of these?" }).isVisible()) {
       await citizen.getByRole("button", { name: "Continue" }).click();
     }
