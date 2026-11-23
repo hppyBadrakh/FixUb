@@ -126,7 +126,7 @@ Screen ← useStore().state ← GET /api/v1/... (SWR, every 15 s) ← Postgres
 | `setPriority`, `assignReport`, `changeStatus` | `src/server/actions/reports-admin.ts` |
 | `moderateReport`, `undoModeration` | `src/server/actions/moderation.ts` |
 | `saveOrganization`, `saveCategories` | `src/server/actions/organizations.ts`, `categories.ts` |
-| `setUserAccess`, `setUserBanned` | `src/server/actions/users.ts` |
+| `setUserAccess`, `setUserBanned`, `deleteUser` | `src/server/actions/users.ts` |
 | `acceptTerms`, `markNotificationsRead` | `src/server/actions/account.ts` |
 
 To add something new, copy the reference example. Each file starts with a comment explaining the pattern:
@@ -181,7 +181,8 @@ Postgres; Google is the only way in. `GET /api/v1/me` returns who is signed in.
   to ask everyone again).
 - An admin gives people their access on **`/admin/users`**: staff or manager of one organization
   (and unit), or admin. The person has to have signed in once so that they are in the list.
-  Admins can also block an account, which signs it out everywhere.
+  Admins can also block an account, which signs it out everywhere, and delete one when its
+  owner asks: the account and everything personal goes, the reports stay public and unlinked.
 - An admin can't change or block their own account, so one admin can't lock everybody out.
 - The first admin comes from `ADMIN_EMAILS` on the server.
 - On a demonstration deployment the sample users (`u-citizen`, `u-admin`, `u-road-staff`, …) are
@@ -428,9 +429,18 @@ keeps a way to sign in.
 8. **Plans and monitoring.** See [Operations](#operations): the Workers paid plan, the Neon
    plan, and who gets the Monitor workflow's emails.
 
-Not software, and still needed before real use: organizations that have agreed to act on reports,
-people to triage and moderate every day, and a reviewed privacy policy and terms (the notice in
-the report form is a plain-language summary, not a legal text).
+Not software, and still needed before real use:
+
+- **Organizations that have agreed to act on reports.** What to ask of them and what to settle
+  in writing: [docs/partner-onboarding.md](docs/partner-onboarding.md).
+- **People to triage and moderate every day.** The routine, the requests that come up and what
+  to do when the site is down: [docs/operations-runbook.md](docs/operations-runbook.md).
+- **A first use small enough to learn from.** [docs/pilot-plan.md](docs/pilot-plan.md).
+- **Reviewed legal texts.** `/privacy` and `/terms` are drafts written from what the software
+  does. Name the operator and a contact address in `src/lib/operator.ts`, have a lawyer check
+  the texts in `src/components/pages/legal.tsx` against Mongolian law, then set `reviewed: true`
+  there: until then both pages carry a "Draft" banner. If the notice before a first report
+  changes in meaning, raise `CONSENT_VERSION` so everyone is asked again.
 
 ## Operations
 

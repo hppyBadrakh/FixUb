@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Camera, CircleCheck, Hourglass, LogIn, MapPin, Pencil, RotateCcw, Search, Send, X } from "lucide-react";
 import { Button, ButtonLink, IconButton } from "@/components/ui/button";
 import { Banner, PageSkeleton, SampleDataPill, useToast } from "@/components/ui/feedback";
+import { LegalLinks } from "@/components/pages/legal";
 import { Select, TextField } from "@/components/ui/form";
 import { CameraCapture } from "@/components/fixub/camera";
 import { Photo } from "@/components/fixub/photo";
@@ -211,6 +212,7 @@ export function ReportFlow() {
           >
             {t("Ойлголоо, үргэлжлүүлье", "I understand, continue")}
           </Button>
+          <LegalLinks className="mt-4 text-center text-small text-ink-subtle" />
         </div>
       </FlowFrame>
     );

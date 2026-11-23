@@ -63,6 +63,15 @@ export async function photoBucket(db: Db | Tx): Promise<PhotoBucket> {
   return (await r2Bucket()) ?? databaseBucket(db);
 }
 
+/** Removes photo bytes from wherever they are (both stores are tried). */
+export async function deletePhotoObjects(db: Db | Tx, keys: readonly string[]): Promise<void> {
+  const r2 = await r2Bucket();
+  for (const key of keys) {
+    if (r2) await r2.delete(key).catch(() => {});
+    await databaseBucket(db).delete(key);
+  }
+}
+
 /**
  * Reads a photo from wherever it is. A photo stored in Postgres before the bucket existed is
  * moved to R2 the first time it is read, so the table empties itself with use.

@@ -178,6 +178,14 @@ export const ACTIONS: Record<string, ActionRule> = {
     input: async () => ({ userId: await makeUser(), banned: true }),
     refusals: [{ name: "your own account", as: "admin", input: () => ({ userId: PERSONAS.admin, banned: true }), error: "forbidden" }],
   },
+  "users/deleteUser": {
+    allowed: ["admin"],
+    input: async () => ({ userId: await makeUser() }),
+    refusals: [
+      { name: "your own account", as: "admin", input: () => ({ userId: PERSONAS.admin }), error: "forbidden" },
+      { name: "an account that doesn't exist", as: "admin", input: () => ({ userId: "nobody" }), error: "not_found" },
+    ],
+  },
   "organizations/saveOrganization": {
     allowed: ["admin"],
     // The road organization exactly as it is: saving it again changes nothing.

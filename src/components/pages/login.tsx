@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Building2, Check, LogIn, ShieldCheck, User as UserIcon } from "lucide-react";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Banner, PageSkeleton, useToast } from "@/components/ui/feedback";
+import { LegalLinks } from "@/components/pages/legal";
 import { cn } from "@/lib/cn";
 import { useT } from "@/lib/i18n";
 import { ROLE_LABEL } from "@/lib/meta";
@@ -188,6 +189,7 @@ export function LoginPage() {
           </Button>
         )}
       </div>
+      <LegalLinks className="mt-4 text-small text-ink-subtle" />
     </div>
   );
 }

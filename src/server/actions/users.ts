@@ -2,12 +2,23 @@
 
 // Admin only: decide what a person may do (citizen, organization staff or manager, admin), and
 // block or unblock an account. People appear in the list once they have signed in.
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import * as z from "zod";
-import { auditEvents, organizationMembers, organizations, organizationUnits, sessions, users } from "@/db/schema";
+import {
+  auditEvents,
+  organizationMembers,
+  organizations,
+  organizationUnits,
+  reportConfirmations,
+  reportImages,
+  reports,
+  sessions,
+  users,
+} from "@/db/schema";
 import { action } from "@/server/action";
 import { getActor, requireRole } from "@/server/actor";
 import { AppError } from "@/server/errors";
+import { deletePhotoObjects } from "@/server/photos";
 import { rateLimit } from "@/server/rate-limit";
 
 const userId = z.string().trim().min(1).max(64);
@@ -29,6 +40,7 @@ const setAccessSchema = z.object({
 });
 
 const setBannedSchema = z.object({ userId, banned: z.boolean() });
+const deleteUserSchema = z.object({ userId });
 
 const notYourself = (what: string) => new AppError("forbidden", `You can't ${what} your own account. Ask another admin.`);
 
@@ -97,6 +109,47 @@ export async function setUserBanned(input: unknown) {
         metadata: {},
       });
     });
+    return {};
+  });
+}
+
+/**
+ * Deletes an account for good, as a person may ask under the privacy policy. Gone: their name,
+ * email, sign-in, sessions, access, "me too", answers, flags' link to them, notifications, and
+ * photos they uploaded but never attached. Kept: the reports they filed, which stay a public
+ * record with no link to anyone (`reporter_id` becomes NULL). It can't be undone.
+ */
+export async function deleteUser(input: unknown) {
+  return action(deleteUserSchema, input, async ({ db, input }) => {
+    const admin = requireRole(await getActor(db), "admin");
+    await rateLimit(db, admin, "console.write");
+    if (input.userId === admin.id) throw notYourself("delete");
+
+    const orphans = await db.transaction(async (tx) => {
+      const [target] = await tx.select({ id: users.id }).from(users).where(eq(users.id, input.userId)).for("update");
+      if (!target) throw new AppError("not_found");
+
+      // The "me too" count on each report is kept by hand: remember which ones lose a vote.
+      const confirmed = await tx.select({ reportId: reportConfirmations.reportId }).from(reportConfirmations).where(eq(reportConfirmations.userId, target.id));
+      // Photos uploaded and never attached to anything belong to nobody afterwards.
+      const loose = await tx
+        .delete(reportImages)
+        .where(and(eq(reportImages.uploadedBy, target.id), isNull(reportImages.reportId)))
+        .returning({ key: reportImages.storageKey });
+
+      await tx.delete(users).where(eq(users.id, target.id)); // the database drops or unlinks everything that points at them
+
+      if (confirmed.length) {
+        await tx
+          .update(reports)
+          .set({ confirmationCount: sql`(select count(*) from ${reportConfirmations} where ${reportConfirmations.reportId} = ${reports.id})` })
+          .where(inArray(reports.id, confirmed.map((c) => c.reportId)));
+      }
+      // The trail says that an account was deleted and by whom, not whose it was.
+      await tx.insert(auditEvents).values({ actorId: admin.id, action: "user.delete", targetType: "user", targetId: target.id, metadata: {} });
+      return loose.map((p) => p.key);
+    });
+    await deletePhotoObjects(db, orphans);
     return {};
   });
 }

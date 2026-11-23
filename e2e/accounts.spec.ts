@@ -67,3 +67,16 @@ test("a citizen can't open the Users page or its data", async ({ page }) => {
   await page.goto("/admin/users");
   await expect(page.getByLabel("Search by name or email")).toHaveCount(0);
 });
+
+test("the privacy and terms pages are public, linked, and say they are drafts", async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.setItem("fixub-lang", "en"));
+  await page.goto("/login");
+  await page.getByRole("link", { name: "Privacy" }).click();
+  await expect(page.getByRole("heading", { name: "Privacy", level: 1 })).toBeVisible();
+  await expect(page.getByText("Who filed a report is never shown")).toBeVisible();
+  await expect(page.getByText("It has not been reviewed by a lawyer")).toBeVisible();
+
+  await page.getByRole("link", { name: "Terms of use" }).click();
+  await expect(page.getByRole("heading", { name: "Terms of use", level: 1 })).toBeVisible();
+  await expect(page.getByText("FixUB is not an emergency service.")).toBeVisible();
+});

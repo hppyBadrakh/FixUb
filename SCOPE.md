@@ -84,7 +84,7 @@ Rules:
 
 Done: a real backend (Postgres), Google sign-in, server-side role checks, account management by admins, and a consent notice before the first report.
 
-1. Go live: the checklist is in the README, "Going live".
+1. Go live: the checklist is in the README, "Going live". The pilot, partner and daily-operations documents are in `docs/`.
 2. Fix the gaps above.
 3. Add notifications.
 4. Connect real organizations.

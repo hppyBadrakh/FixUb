@@ -3,7 +3,7 @@
 // The admin's Users page: who has signed in, and what each person may do. Like the categories
 // editor it has its own data (useApi) instead of the store's, and saves with server actions.
 import { useDeferredValue, useState } from "react";
-import { Ban, Save, ShieldCheck, Undo2, UserRound } from "lucide-react";
+import { Ban, Save, ShieldCheck, Trash2, Undo2, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Banner, EmptyState, PageSkeleton, useToast } from "@/components/ui/feedback";
 import { SearchField, Select } from "@/components/ui/form";
@@ -15,7 +15,7 @@ import { useT } from "@/lib/i18n";
 import { ROLE_LABEL } from "@/lib/meta";
 import { useStore } from "@/lib/store";
 import type { Organization, Role } from "@/lib/types";
-import { setUserAccess, setUserBanned } from "@/server/actions/users";
+import { deleteUser, setUserAccess, setUserBanned } from "@/server/actions/users";
 
 interface Draft {
   role: Role;
@@ -85,6 +85,7 @@ function AccountRow({ account, organizations, isMe, onChanged }: { account: Acco
   const [draft, setDraft] = useState<Draft>(() => draftOf(account));
   const [busy, setBusy] = useState(false);
   const [confirmBlock, setConfirmBlock] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const saved = draftOf(account);
   const staff = isStaffRole(draft.role);
@@ -117,6 +118,18 @@ function AccountRow({ account, organizations, isMe, onChanged }: { account: Acco
     if (!res.ok) failed(res.message);
     else {
       toast({ tone: "success", title: banned ? t("Хэрэглэгчийг хаалаа", "Account blocked") : t("Хэрэглэгчийг нээлээ", "Account unblocked"), body: account.name });
+      await onChanged();
+    }
+    setBusy(false);
+  };
+
+  const remove = async () => {
+    setBusy(true);
+    setConfirmDelete(false);
+    const res = await deleteUser({ userId: account.id });
+    if (!res.ok) failed(res.message);
+    else {
+      toast({ tone: "success", title: t("Бүртгэлийг устгалаа", "Account deleted"), body: account.name });
       await onChanged();
     }
     setBusy(false);
@@ -189,6 +202,9 @@ function AccountRow({ account, organizations, isMe, onChanged }: { account: Acco
                 {t("Хаах", "Block")}
               </Button>
             )}
+            <Button size="sm" variant="quiet" icon={Trash2} className="text-danger" disabled={busy} onClick={() => setConfirmDelete(true)}>
+              {t("Устгах", "Delete")}
+            </Button>
           </span>
         </div>
       )}
@@ -211,6 +227,27 @@ function AccountRow({ account, organizations, isMe, onChanged }: { account: Acco
         {t(
           "Энэ хүн бүх төхөөрөмжөөс гарч, дахин нэвтэрч чадахгүй болно. Мэдээллүүд нь хэвээр үлдэнэ. Дараа нь нээж болно.",
           "They are signed out everywhere and can't sign in again. Their reports stay. You can unblock them later.",
+        )}
+      </Dialog>
+
+      <Dialog
+        open={confirmDelete}
+        title={t(`${account.name}-н бүртгэлийг устгах уу?`, `Delete ${account.name}'s account?`)}
+        onClose={() => setConfirmDelete(false)}
+        actions={
+          <>
+            <Button data-autofocus onClick={() => setConfirmDelete(false)}>
+              {t("Болих", "Cancel")}
+            </Button>
+            <Button variant="danger" icon={Trash2} onClick={remove}>
+              {t("Бүрмөсөн устгах", "Delete for good")}
+            </Button>
+          </>
+        }
+      >
+        {t(
+          "Тухайн хүн өөрөө хүссэн үед хийнэ. Нэр, имэйл, нэвтрэлт, эрх, “Надад ч бас”, хариултууд устана. Илгээсэн мэдээллүүд нь нийтэд үлдэх боловч хэнтэй ч холбогдохгүй. Буцаах боломжгүй.",
+          "Do this when the person asks for it. Their name, email, sign-in, access, “me too” and answers are removed. The reports they filed stay public but are linked to nobody. This can't be undone.",
         )}
       </Dialog>
     </li>
