@@ -7,6 +7,8 @@ import { SegmentedControl } from "@/components/ui/form";
 import { Card } from "@/components/ui/overlay";
 import { BarList, KpiCard, TrendChart } from "@/components/fixub/data";
 import { StatusDot } from "@/components/fixub/status";
+import { useApi } from "@/lib/api/hooks";
+import type { StatisticsResponse } from "@/lib/api/types";
 import { ageBuckets, dailySeries, isOpen, summarize } from "@/lib/domain/metrics";
 import { formatHours } from "@/lib/format";
 import { useT } from "@/lib/i18n";
@@ -14,20 +16,26 @@ import { DISTRICT_META, DISTRICT_ORDER, STATUS_META, STATUS_ORDER } from "@/lib/
 import { useNow, useStore } from "@/lib/store";
 
 export function Statistics() {
-  const { ready, state, catalog } = useStore();
+  const { ready, state, server, catalog } = useStore();
   const { lang, t, pick } = useT();
   const now = useNow(60_000);
   const [period, setPeriod] = useState<"7" | "30" | "90">("30");
   const visible = useMemo(() => state.reports.filter((r) => r.visibility === "visible"), [state.reports]);
   const days = Number(period);
-  const s = useMemo(() => summarize(visible, now, days), [visible, now, days]);
-  const series = useMemo(() => dailySeries(visible, now, 14), [visible, now]);
+  // With a server the numbers are counted in SQL (re-read every minute). Until they arrive, and
+  // in the browser-only demo, the same definitions run here on the loaded reports.
+  const fromServer = useApi<StatisticsResponse>(server.configured ? `/api/v1/statistics?days=${days}` : null, { refreshInterval: 60_000, keepPreviousData: true }).data;
+  const stats = fromServer?.days === days ? fromServer : undefined;
+  const s = useMemo(() => stats?.summary ?? summarize(visible, now, days), [stats, visible, now, days]);
+  const series = useMemo(() => stats?.series ?? dailySeries(visible, now, 14), [stats, visible, now]);
+  const ages = useMemo(() => stats?.ageBuckets ?? ageBuckets(visible, now), [stats, visible, now]);
 
   if (!ready) return <PageSkeleton />;
 
   const open = visible.filter(isOpen);
-  const statusCounts = STATUS_ORDER.map((st) => ({ st, n: visible.filter((r) => r.status === st).length }));
-  const total = visible.length || 1;
+  const statusCounts = STATUS_ORDER.map((st) => ({ st, n: stats ? (stats.byStatus[st] ?? 0) : visible.filter((r) => r.status === st).length }));
+  const total = statusCounts.reduce((sum, c) => sum + c.n, 0) || 1;
+  const openIn = (kind: "openByCategory" | "openByDistrict", key: string, count: () => number) => (stats ? (stats[kind][key] ?? 0) : count());
   const inSum = series.incoming.reduce((a, b) => a + b, 0);
   const outSum = series.resolved.reduce((a, b) => a + b, 0);
   const periodLabel = t(`сүүлийн ${days} хоног`, `last ${days} days`);
@@ -127,7 +135,7 @@ export function Statistics() {
           <BarList
             ariaLabel={t("Ангиллаар нээлттэй мэдээлэл", "Open reports by category")}
             items={catalog.list
-              .map((c) => ({ key: c.id, label: pick(c.name), icon: catalog.icon(c.id), value: open.filter((r) => r.category === c.id).length }))
+              .map((c) => ({ key: c.id, label: pick(c.name), icon: catalog.icon(c.id), value: openIn("openByCategory", c.id, () => open.filter((r) => r.category === c.id).length) }))
               .filter((i) => i.value > 0)
               .sort((a, b) => b.value - a.value)}
           />
@@ -135,13 +143,13 @@ export function Statistics() {
         <Card title={t("Дүүргээр", "Open by district")} subtitle={t("Хаана илүү их байна вэ?", "Where are they?")}>
           <BarList
             ariaLabel={t("Дүүргээр нээлттэй мэдээлэл", "Open reports by district")}
-            items={DISTRICT_ORDER.map((d) => ({ key: d, label: pick(DISTRICT_META[d].label), value: open.filter((r) => r.district === d).length })).sort((a, b) => b.value - a.value)}
+            items={DISTRICT_ORDER.map((d) => ({ key: d, label: pick(DISTRICT_META[d].label), value: openIn("openByDistrict", d, () => open.filter((r) => r.district === d).length) })).sort((a, b) => b.value - a.value)}
           />
         </Card>
         <Card title={t("Нээлттэй мэдээллийн нас", "Age of open reports")} subtitle={t("Иргэд хэр удаан хүлээж байна вэ?", "How long have people been waiting?")}>
           <BarList
             ariaLabel={t("Насаар", "By age")}
-            items={ageBuckets(visible, now).map((b) => ({
+            items={ages.map((b) => ({
               key: b.key,
               label: lang === "mn" ? b.mn : b.en,
               value: b.value,
@@ -151,7 +159,9 @@ export function Statistics() {
         </Card>
       </div>
       <p className="mt-6 text-caption text-ink-subtle">
-        {t(`Тоонууд ${periodLabel}-ийн демо өгөгдөл дээр тооцоологдсон. Нуусан мэдээллийг оруулаагүй.`, `Figures are calculated from demo data (${periodLabel}). Hidden reports are excluded.`)}
+        {server.configured
+          ? t(`Тоонуудыг өгөгдлийн сангаас тооцсон (${periodLabel}). Нуусан мэдээллийг оруулаагүй.`, `Figures are counted in the database (${periodLabel}). Hidden reports are excluded.`)
+          : t(`Тоонууд ${periodLabel}-ийн демо өгөгдөл дээр тооцоологдсон. Нуусан мэдээллийг оруулаагүй.`, `Figures are calculated from demo data (${periodLabel}). Hidden reports are excluded.`)}
       </p>
     </div>
   );

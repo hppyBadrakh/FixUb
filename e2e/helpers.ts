@@ -25,8 +25,11 @@ export async function me(page: Page): Promise<Me> {
 
 /** Signs this browser in through the demo-login endpoint (the same call the role picker makes). */
 export async function signInAs(page: Page, user: DemoUser): Promise<void> {
-  const res = await page.request.post("/api/auth/demo/sign-in", { data: { userId: USERS[user] } });
-  expect(res.status(), `demo sign-in as ${user}: is DEMO_LOGIN=true and the database seeded?`).toBe(200);
+  // Signing in is setup, not what a test checks: one dropped database connection must not fail it.
+  await expect(async () => {
+    const res = await page.request.post("/api/auth/demo/sign-in", { data: { userId: USERS[user] } });
+    expect(res.status(), `demo sign-in as ${user}: is DEMO_LOGIN=true and the database seeded?`).toBe(200);
+  }).toPass({ intervals: [500, 2000], timeout: 20_000 });
   expect((await me(page)).user?.id).toBe(USERS[user]);
 }
 

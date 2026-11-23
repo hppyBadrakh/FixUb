@@ -161,6 +161,7 @@ export const ROUTES: Record<string, RouteRule> = {
   categories: { allowed: "public" },
   me: { allowed: "public" },
   organizations: { allowed: "public" },
+  statistics: { allowed: "public" },
   reports: {
     allowed: "public",
     refusals: [

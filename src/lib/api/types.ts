@@ -129,3 +129,18 @@ export interface StaffResponse {
 export interface ActivityResponse {
   events: ActivityEvent[];
 }
+
+/* ---- GET /api/v1/statistics ---- */
+
+/**
+ * The public statistics page, counted in SQL over the visible reports. `summary`, `series` and
+ * `ageBuckets` are the dashboard's; the three breakdowns list only keys that have reports.
+ */
+export interface StatisticsResponse extends Pick<DashboardResponse, "now" | "days" | "summary" | "series" | "ageBuckets"> {
+  /** Visible reports per status. */
+  byStatus: Record<string, number>;
+  /** Open visible reports per category slug. */
+  openByCategory: Record<string, number>;
+  /** Open visible reports per district. */
+  openByDistrict: Record<string, number>;
+}
