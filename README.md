@@ -82,6 +82,7 @@ Cloudflare dashboard. Never commit `.env.local` or `.dev.vars`.
 | `BETTER_AUTH_URL` | for sign-in | The site's origin, no trailing slash: `http://localhost:3000` locally, the `workers.dev` URL in production |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | for Google sign-in | From a Google Cloud OAuth client (type "Web application"). Redirect URI: `<BETTER_AUTH_URL>/api/auth/callback/google`. Without them the login page says Google isn't set up |
 | `DEMO_LOGIN` | development only | `true` makes this a demonstration deployment: sample users on `/login` and "Sample data" notes. Anything else turns both off, and the server refuses sample sign-ins. **Never `true` on the real site** |
+| `REVIEW_BEFORE_PUBLIC` | optional | `true`: a new report is only public once an admin has reviewed it (set its priority). Until then only its reporter, admins and assigned staff see it. Default: public at once |
 | `ADMIN_EMAILS` | on the real site | Comma-separated Google emails that are always admins. This is how the first admin gets in; everyone else is given access on `/admin/users` |
 
 ## How the real app is built
@@ -114,6 +115,7 @@ Screen ← useStore().state ← GET /api/v1/... (SWR, every 15 s) ← Postgres
 | `GET /api/v1/admin/accounts` | admin | Everyone who has signed in, with their access (`?q=` searches name and email) |
 | `GET /api/v1/admin/dashboard`, `/staff/dashboard` | admin; staff, manager | The overview's numbers counted in SQL (`?days=1\|7\|30`). Screens read them with `useDashboard()` |
 | `GET /api/v1/admin/activity`, `/staff/activity` | admin; staff, manager | The activity feed from the database (`?limit=`); it becomes `useStore().state.activity` |
+| `GET /api/v1/notifications` | signed in | The bell: the caller's newest 30 notifications and the unread count |
 | `GET /api/v1/statistics` | everyone | The public statistics page counted in SQL (`?days=7\|30\|90`) |
 | `POST /api/v1/photos`, `GET /api/v1/photos/{id}` | see "Photos" | Upload and show photos |
 
@@ -124,7 +126,7 @@ Screen ← useStore().state ← GET /api/v1/... (SWR, every 15 s) ← Postgres
 | `moderateReport`, `undoModeration` | `src/server/actions/moderation.ts` |
 | `saveOrganization`, `saveCategories` | `src/server/actions/organizations.ts`, `categories.ts` |
 | `setUserAccess`, `setUserBanned` | `src/server/actions/users.ts` |
-| `acceptTerms` | `src/server/actions/account.ts` |
+| `acceptTerms`, `markNotificationsRead` | `src/server/actions/account.ts` |
 
 To add something new, copy the reference example. Each file starts with a comment explaining the pattern:
 
@@ -183,6 +185,28 @@ Postgres; Google is the only way in. `GET /api/v1/me` returns who is signed in.
 - The first admin comes from `ADMIN_EMAILS` on the server.
 - On a demonstration deployment the sample users (`u-citizen`, `u-admin`, `u-road-staff`, …) are
   also offered on `/login`.
+
+## What happens around a report
+
+Rules that go beyond the status lifecycle (`src/lib/domain/lifecycle.ts`):
+
+- **Notifications (the bell).** Written in the same transaction as the change they report
+  (`notify()` in `src/server/notifications.ts`), never naming a person:
+  the reporter hears about the review, the assignment, every status change, and hiding or
+  restoring; people who said "me too" are asked when it is resolved; the organization's staff
+  hear about an assignment; its managers and the admins hear about a dispute. Nobody is told
+  about what they did themselves. There is no email yet.
+- **"Is it actually fixed?"** Only the reporter and people who said "me too" may answer. When
+  "still broken" overtakes "fixed", the report is marked **disputed** (`reports.disputed_at`):
+  the manager and admins are notified once, the consoles count it, and the next status change
+  clears it. The official status stays the staff's decision.
+- **Response targets.** `RESPONSE_TARGET_DAYS` in `src/lib/meta.ts` (critical 2, high 7, medium
+  14, low 30 days after the priority is set). An open report past its target is **overdue** in
+  the consoles. `dueAt` is only sent to admins and assigned staff: it is a target for them,
+  not a promise to citizens.
+- **Review before public** (`REVIEW_BEFORE_PUBLIC=true`): see "Environment variables". The rule
+  is `wherePublic()` / `isPublic()` in `src/server/queries/reports.ts`, used by the public list,
+  report pages, photos, statistics and the citizen actions.
 
 ## Photos
 

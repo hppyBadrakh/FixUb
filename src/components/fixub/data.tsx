@@ -501,6 +501,7 @@ export function ReportTable({
               </td>
               <td className={cn("px-3 py-2.5 align-top tnum", ageCls(r))} title={formatDateTime(r.createdAt, lang)}>
                 {ageShort(r.createdAt, now, lang)}
+                              {r.dueAt && now > r.dueAt && <span className="mt-0.5 block text-caption font-[650] text-danger">{t("Хугацаа хэтэрсэн", "Overdue")}</span>}
               </td>
               <td className="px-3 py-2.5 text-right align-top font-[600] tnum">{r.confirmations.length}</td>
               {showAssignee && (

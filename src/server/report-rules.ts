@@ -21,6 +21,8 @@ export async function lockReport(tx: Tx, id: string) {
       reporterId: reports.reporterId,
       status: reports.status,
       visibility: reports.visibility,
+      priority: reports.priority,
+      disputedAt: reports.disputedAt,
       version: reports.version,
       organizationId: reports.assignedOrganizationId,
     })

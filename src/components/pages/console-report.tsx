@@ -17,7 +17,7 @@ import { suggestedOrganization, tally } from "@/lib/domain/rules";
 import { distanceM } from "@/lib/domain/geo";
 import { canWorkOn, transitionOptions } from "@/lib/domain/lifecycle";
 import { descriptionOf, placeOf, reportTitle } from "@/lib/domain/metrics";
-import { formatDateTime, timeAgo } from "@/lib/format";
+import { formatDate, formatDateTime, timeAgo } from "@/lib/format";
 import { useT } from "@/lib/i18n";
 import { CLOSURE_LABEL, DISTRICT_META, FLAG_REASON_LABEL, PRIORITY_META, PRIORITY_ORDER, STATUS_META } from "@/lib/meta";
 import { useNow, useStore } from "@/lib/store";
@@ -346,6 +346,14 @@ export function ConsoleReport({ area }: { area: "admin" | "staff" }) {
               >
                 {report.priority ? t("Ач холбогдлыг өөрчлөх", "Change priority") : t("Ач холбогдол тогтоох", "Set priority")}
               </Button>
+              {report.dueAt && (
+                <p className={`mt-3 text-small ${now > report.dueAt ? "font-[650] text-danger" : "text-ink-muted"}`}>
+                  {now > report.dueAt
+                    ? t(`Зорилтот хугацаа ${Math.ceil((now - report.dueAt) / 864e5)} хоногоор хэтэрсэн`, `Overdue by ${Math.ceil((now - report.dueAt) / 864e5)} day(s)`)
+                    : t("Зорилтот хугацаа:", "Target: resolve by")}{" "}
+                  {formatDate(report.dueAt, lang)}
+                </p>
+              )}
               {report.priorityDecision && (
                 <p className="mt-3 text-caption text-ink-subtle">
                   {t("Тогтоосон", "Set by")} {report.priorityDecision.by} · {formatDateTime(report.priorityDecision.at, lang)}

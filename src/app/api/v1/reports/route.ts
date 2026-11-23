@@ -5,7 +5,7 @@
 //   ?category=roads               only this category
 //   ?mine=1                       the signed-in user's own reports instead, hidden ones included
 //
-// Everyone gets visible reports only. Nobody is identified in the answer (see queries/reports.ts).
+// Everyone gets public reports only (see wherePublic). Nobody is identified in the answer (see queries/reports.ts).
 import { and, inArray, type SQL } from "drizzle-orm";
 import * as z from "zod";
 import { reports } from "@/db/schema";
@@ -14,7 +14,7 @@ import { getActor, requireActor } from "@/server/actor";
 import { api } from "@/server/api";
 import { withDb } from "@/server/db";
 import { parseSearchParams } from "@/server/parse";
-import { loadReports, whereCategory, whereInBox, whereReportedBy, whereVisible } from "@/server/queries/reports";
+import { loadReports, whereCategory, whereInBox, wherePublic, whereReportedBy } from "@/server/queries/reports";
 import { REPORT_STATUSES } from "@/server/schemas";
 
 const list = (s: string) => s.split(",").filter(Boolean);
@@ -47,7 +47,7 @@ export async function GET(request: Request) {
       const q = parseSearchParams(querySchema, request);
       const actor = await getActor(db);
 
-      const filters: (SQL | undefined)[] = [q.mine ? whereReportedBy(requireActor(actor).id) : whereVisible];
+      const filters: (SQL | undefined)[] = [q.mine ? whereReportedBy(requireActor(actor).id) : wherePublic()];
       if (q.bbox) filters.push(whereInBox(q.bbox as [number, number, number, number]));
       if (q.status?.length) filters.push(inArray(reports.status, q.status));
       if (q.category) filters.push(whereCategory(q.category));

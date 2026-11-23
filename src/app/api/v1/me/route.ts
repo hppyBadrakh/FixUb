@@ -28,9 +28,9 @@ export async function GET() {
   return api<MeResponse>(async () => {
     const env = serverEnv();
     if (!env.databaseUrl || !env.authSecret) {
-      return { configured: false, google: false, demoLogin: false, user: null };
+      return { configured: false, google: false, demoLogin: false, reviewBeforePublic: false, user: null };
     }
     const user = await withDb(async (db) => toSessionUser(await getActor(db)));
-    return { configured: true, google: !!env.google, demoLogin: env.demoLogin, ...(env.demoLogin ? { sampleUsers: DEMO_USERS } : {}), user };
+    return { configured: true, google: !!env.google, demoLogin: env.demoLogin, reviewBeforePublic: env.reviewBeforePublic, ...(env.demoLogin ? { sampleUsers: DEMO_USERS } : {}), user };
   });
 }

@@ -289,6 +289,11 @@ export const reports = pgTable(
     updatedAt: updatedAt(),
     statusChangedAt: timestamp("status_changed_at", { withTimezone: true }).notNull().defaultNow(),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    /**
+     * Set when more people answer "still broken" than "fixed" on the current resolution; cleared
+     * by the next status change. The official status stays what staff set: this is a signal to them.
+     */
+    disputedAt: timestamp("disputed_at", { withTimezone: true }),
   },
   (t) => [
     unique("reports_reporter_request_key").on(t.reporterId, t.clientRequestId),
@@ -523,6 +528,29 @@ export const auditEvents = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("audit_events_target_idx").on(t.targetType, t.targetId, t.createdAt)],
+);
+
+/**
+ * What a person is told about in the app (the bell): their report moved on, a report was
+ * assigned to their organization, citizens say a fix didn't hold. Written in the same
+ * transaction as the change it reports (src/server/notifications.ts).
+ */
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** 'report.status', 'report.assigned', 'report.disputed', 'report.hidden', 'report.restored'. */
+    type: text("type").notNull(),
+    reportId: uuid("report_id").references(() => reports.id, { onDelete: "cascade" }),
+    /** What the text needs besides the report, e.g. `{ to: "resolved" }`. Never another person's identity. */
+    data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("notifications_user_idx").on(t.userId, t.createdAt.desc())],
 );
 
 /** Fixed-window counters for write limits, e.g. key 'report.create:user:{id}'. */

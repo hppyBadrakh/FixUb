@@ -121,6 +121,12 @@ test.describe.serial("full loop: report → priority → assign → resolve → 
     await citizen.getByRole("button", { name: "Fixed", exact: true }).click();
     await expect(citizen.getByText("Thanks — recorded as fixed")).toBeVisible();
     await expect(citizen.getByText("say fixed")).toContainText("1");
+
+    // The bell tells the reporter what happened meanwhile, without naming anyone.
+    await citizen.getByRole("button", { name: /^Notifications/ }).click();
+    await expect(citizen.getByText(`Your report ${ref} is now: resolved`)).toBeVisible();
+    await expect(citizen.getByText(`Your report ${ref} was assigned to Road Maintenance (demo)`)).toBeVisible();
+    await expect(citizen.getByText(/was reviewed by the FixUB team \(priority: high\)/)).toBeVisible();
     await citizen.context().close();
   });
 });

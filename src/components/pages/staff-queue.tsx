@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CircleCheck, Inbox, Search, TriangleAlert, Wrench } from "lucide-react";
+import { CircleCheck, CircleX, Inbox, Search, TriangleAlert, Wrench } from "lucide-react";
 import { EmptyState, PageSkeleton, SampleDataPill } from "@/components/ui/feedback";
 import { SegmentedControl } from "@/components/ui/form";
 import { Card } from "@/components/ui/overlay";
@@ -36,6 +36,8 @@ export function StaffQueue() {
     }),
     [mine, unitId],
   );
+  const overdue = lists.open.filter((r) => r.dueAt && now > r.dueAt).length;
+  const disputed = mine.filter((r) => r.status === "resolved" && r.disputedAt).length;
   const rows = useMemo(() => sortReports(lists[tab], sort, lang, catalog), [lists, tab, sort, lang, catalog]);
   // Counted in SQL on the server; the same definitions run here until the answer arrives.
   const dashboard = useDashboard("staff", 7);
@@ -60,7 +62,7 @@ export function StaffQueue() {
         <SampleDataPill />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <KpiCard icon={Inbox} label={t("Нээлттэй", "Open")} value={s.open} definition={t("Танай байгууллагад хуваарилагдсан нээлттэй мэдээлэл.", "Open reports assigned to your organization.")} />
         <KpiCard
           icon={Search}
@@ -70,6 +72,20 @@ export function StaffQueue() {
           definition={t("“Мэдээлэгдсэн” төлөвтэй: хэн ч хараахан арга хэмжээ аваагүй.", "Status “Reported”: nobody has acted yet.")}
         />
         <KpiCard icon={Wrench} label={t("Ажиллаж буй", "Being worked on")} value={s.working} definition={t("Шалгаж байна + засварлаж байна.", "Investigating + in progress.")} />
+        <KpiCard
+          icon={TriangleAlert}
+          label={t("Хугацаа хэтэрсэн", "Overdue")}
+          value={overdue}
+          attention={overdue > 0}
+          definition={t("Ач холбогдлын зорилтот хугацаа хэтэрсэн нээлттэй мэдээлэл.", "Open reports past the target for their priority.")}
+        />
+        <KpiCard
+          icon={CircleX}
+          label={t("Засаагүй гэсэн", "Disputed")}
+          value={disputed}
+          attention={disputed > 0}
+          definition={t("Шийдвэрлэсэн боловч иргэд засаагүй хэвээр гэж хариулсан.", "Resolved, but citizens answer that it is still broken.")}
+        />
         <KpiCard icon={CircleCheck} label={t("Шийдвэрлэсэн · 7 хоног", "Resolved · 7 days")} value={s.resolved} definition={t("Сүүлийн 7 хоногт шийдвэрлэсэн.", "Moved to Resolved in the last 7 days.")} />
       </div>
 

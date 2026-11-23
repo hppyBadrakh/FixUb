@@ -18,6 +18,8 @@ export interface ServerInfo {
    * one-click sample users, and screens say that the data is sample data.
    */
   demoLogin: boolean;
+  /** New reports are only public once an admin has reviewed them. */
+  reviewBeforePublic: boolean;
   /** The sample users the login page offers there; empty everywhere else. */
   sampleUsers: User[];
 }
@@ -121,7 +123,12 @@ export function FixubProvider({ children }: { children: React.ReactNode }) {
 
   const on = !!me.data?.configured;
   const server = useMemo<ServerInfo>(
-    () => ({ google: !!me.data?.google, demoLogin: !!me.data?.demoLogin, sampleUsers: me.data?.sampleUsers ?? [] }),
+    () => ({
+      google: !!me.data?.google,
+      demoLogin: !!me.data?.demoLogin,
+      reviewBeforePublic: !!me.data?.reviewBeforePublic,
+      sampleUsers: me.data?.sampleUsers ?? [],
+    }),
     [me.data],
   );
   const sessionUser = me.data?.user ?? null;

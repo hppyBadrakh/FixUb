@@ -30,6 +30,8 @@ export interface MeResponse {
   google: boolean;
   /** A demonstration deployment (DEMO_LOGIN=true): one-click sample users, and "sample data" notices. */
   demoLogin: boolean;
+  /** New reports are only public once an admin has reviewed them (REVIEW_BEFORE_PUBLIC=true). */
+  reviewBeforePublic: boolean;
   /** The sample users the login page offers. Only present when `demoLogin` is true. */
   sampleUsers?: User[];
   user: SessionUser | null;
@@ -171,4 +173,29 @@ export interface AccountsResponse {
   accounts: Account[];
   /** How many accounts match the search in all. */
   total: number;
+}
+
+/* ---- GET /api/v1/notifications ---- */
+
+export type NotificationType = "report.status" | "report.reviewed" | "report.assigned" | "report.disputed" | "report.hidden" | "report.restored";
+
+/** One line behind the bell. It never names a person. */
+export interface AppNotification {
+  id: number;
+  type: NotificationType;
+  /** Null when the report was deleted since. */
+  reportId: string | null;
+  reportRef: string | null;
+  /** The reader filed this report (the text then says "your report"). */
+  ownReport: boolean;
+  /** For "report.status": `{ to, reason? }`. For "report.assigned": `{ organizationId }` (slug). */
+  data: Record<string, unknown>;
+  read: boolean;
+  createdAt: number;
+}
+
+export interface NotificationsResponse {
+  /** The newest 30. */
+  notifications: AppNotification[];
+  unread: number;
 }

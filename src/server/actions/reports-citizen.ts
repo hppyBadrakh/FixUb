@@ -18,7 +18,9 @@ import { LIMITS, OPEN_STATUSES } from "@/lib/meta";
 import { action } from "@/server/action";
 import { getActor, requireActor } from "@/server/actor";
 import { AppError, PG, pgErrorCode } from "@/server/errors";
+import { adminIds, notify, staffOf } from "@/server/notifications";
 import { attachReportPhotos } from "@/server/photos";
+import { isPublic } from "@/server/queries/reports";
 import { rateLimit } from "@/server/rate-limit";
 import { lockReport, requestUuid } from "@/server/report-rules";
 import { createReportSchema, flagSchema, meTooSchema, verdictSchema } from "@/server/schemas";
@@ -39,7 +41,7 @@ const findByRequest = async (db: Db | Tx, reporterId: string, requestId: string)
 export async function createReport(input: unknown) {
   return action(createReportSchema, input, async ({ db, input }) => {
     const actor = requireActor(await getActor(db));
-    // A report is public the moment it is filed: the person must have been told so first.
+    // A report becomes public: the person must have been told so first.
     if (!actor.consented) throw new AppError("consent_required");
     const requestId = await requestUuid(input.clientRequestId);
     const existing = await findByRequest(db, actor.id, requestId);
@@ -97,7 +99,7 @@ export async function toggleMeToo(input: unknown) {
     await rateLimit(db, actor, "report.me_too");
     return db.transaction(async (tx) => {
       const report = await lockReport(tx, input.reportId);
-      if (report.visibility !== "visible") throw new AppError("not_found");
+      if (!isPublic(report)) throw new AppError("not_found");
       if (report.reporterId === actor.id) throw new AppError("own_report");
 
       const mine = and(eq(reportConfirmations.reportId, report.id), eq(reportConfirmations.userId, actor.id));
@@ -116,15 +118,27 @@ export async function toggleMeToo(input: unknown) {
   });
 }
 
-/** "Fixed" or "still broken" on a resolved report; `null` takes the answer back. Never changes the status. */
+/**
+ * "Fixed" or "still broken" on a resolved report; `null` takes the answer back. Only the people
+ * the report concerns may answer: its reporter and those who said "me too". It never changes
+ * the official status, but when "still broken" overtakes "fixed" the report is marked disputed
+ * and the organization's managers and the admins are told.
+ */
 export async function setVerdict(input: unknown) {
   return action(verdictSchema, input, async ({ db, input }) => {
     const actor = requireActor(await getActor(db));
     await rateLimit(db, actor, "report.verdict");
     return db.transaction(async (tx) => {
       const report = await lockReport(tx, input.reportId);
-      if (report.visibility !== "visible") throw new AppError("not_found");
+      if (!isPublic(report) && report.reporterId !== actor.id) throw new AppError("not_found");
       if (report.status !== "resolved") throw new AppError("not_resolved");
+      if (report.reporterId !== actor.id) {
+        const [confirmed] = await tx
+          .select({ userId: reportConfirmations.userId })
+          .from(reportConfirmations)
+          .where(and(eq(reportConfirmations.reportId, report.id), eq(reportConfirmations.userId, actor.id)));
+        if (!confirmed) throw new AppError("forbidden", "Only the reporter and people who said “me too” can answer whether it is fixed.");
+      }
 
       // Answers belong to the latest resolution: resolving again starts a fresh round.
       const [resolution] = await tx
@@ -148,6 +162,28 @@ export async function setVerdict(input: unknown) {
             set: { verdict: input.verdict },
           });
       }
+
+      // More "still broken" than "fixed": tell the people who can act, once per resolution.
+      if (!report.disputedAt) {
+        const answers = await tx
+          .select({ verdict: resolutionFeedback.verdict, n: count() })
+          .from(resolutionFeedback)
+          .where(eq(resolutionFeedback.resolutionEventId, resolution.id))
+          .groupBy(resolutionFeedback.verdict);
+        const of = (verdict: "fixed" | "not_fixed") => answers.find((a) => a.verdict === verdict)?.n ?? 0;
+        if (of("not_fixed") > of("fixed")) {
+          await tx.update(reports).set({ disputedAt: new Date() }).where(eq(reports.id, report.id));
+          await tx.insert(auditEvents).values({
+            actorId: null,
+            action: "report.disputed",
+            targetType: "report",
+            targetId: report.id,
+            metadata: { fixed: of("fixed"), notFixed: of("not_fixed") },
+          });
+          const managers = await staffOf(tx, report.organizationId, "managers");
+          await notify(tx, [...managers, ...(await adminIds(tx))], "report.disputed", report.id, {}, actor.id);
+        }
+      }
       return {};
     });
   });
@@ -164,7 +200,7 @@ export async function flagReport(input: unknown) {
     return db.transaction(async (tx) => {
       const report = await lockReport(tx, input.reportId);
       // A hidden report can't be flagged by people who can't see it.
-      if (report.visibility !== "visible" && actor.role !== "admin" && report.reporterId !== actor.id) throw new AppError("not_found");
+      if (!isPublic(report) && actor.role !== "admin" && report.reporterId !== actor.id) throw new AppError("not_found");
 
       const [already] = await tx
         .select({ id: moderationFlags.id })
@@ -181,6 +217,7 @@ export async function flagReport(input: unknown) {
       if (autoHidden) {
         await tx.update(reports).set({ visibility: "hidden", updatedAt: new Date() }).where(eq(reports.id, report.id));
         await tx.insert(auditEvents).values({ actorId: null, action: "report.hide", targetType: "report", targetId: report.id, metadata: { automatic: true, openFlags: open } });
+        await notify(tx, [report.reporterId], "report.hidden", report.id, { automatic: true }, actor.id);
       }
       return { autoHidden };
     });

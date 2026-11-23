@@ -45,7 +45,7 @@ export function nextStep(r: Report, state: AppState, t: (mn: string, en: string)
 
 export function ReportDetail() {
   const { id } = useParams<{ id: string }>();
-  const { ready, state, user, act, freshIds, catalog } = useStore();
+  const { ready, state, user, server, act, freshIds, catalog } = useStore();
   const { lang, t, pick } = useT();
   const toast = useToast();
   const router = useRouter();
@@ -89,6 +89,7 @@ export function ReportDetail() {
       not_open: t("Энэ мэдээлэл хаагдсан.", "This report is no longer open."),
       already_flagged: t("Та аль хэдийн мэдэгдсэн байна.", "You've already flagged this report."),
       not_resolved: t("Энэ мэдээлэл шийдэгдээгүй байна.", "This report isn't resolved."),
+      forbidden: t("Зөвхөн мэдээлсэн хүн болон “Надад ч бас” дарсан хүмүүс хариулна.", "Only the reporter and people who said “me too” can answer."),
       rate_limited: t("Хэт олон хүсэлт илгээлээ. Хэсэг хүлээгээд дахин оролдоно уу.", "Too many requests. Wait a little and try again."),
     })[e] ?? t("Алдаа гарлаа. Дахин оролдоно уу.", "Something went wrong. Try again.");
 
@@ -98,6 +99,14 @@ export function ReportDetail() {
         <ArrowLeft aria-hidden className="size-4" /> {t("Газрын зураг руу", "Back to map")}
       </Link>
 
+      {server.reviewBeforePublic && report.visibility === "visible" && report.priority === null && report.reporterId === user?.id && (
+        <Banner tone="info" className="mt-4" title={t("Хянагдахыг хүлээж байна", "Waiting for review")}>
+          {t(
+            "Одоогоор зөвхөн та харж байна. FixUB баг хянасны дараа нийтэд харагдана.",
+            "Only you can see it for now. It becomes public once the FixUB team has reviewed it.",
+          )}
+        </Banner>
+      )}
       {report.visibility === "hidden" && (
         <Banner tone="warning" icon={EyeOff} className="mt-4" title={t("Энэ мэдээлэл нуугдсан", "This report is hidden")}>
           {t(

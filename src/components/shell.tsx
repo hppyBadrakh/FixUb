@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { Button, ButtonLink, IconButton } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/overlay";
+import { NotificationBell } from "@/components/fixub/notifications";
 import { Wordmark } from "@/components/fixub/status";
 import { cn } from "@/lib/cn";
 import { useT } from "@/lib/i18n";
@@ -150,6 +151,7 @@ export function AppHeader() {
               </ButtonLink>
             </span>
           )}
+          <NotificationBell />
           <ButtonLink href="/reports/new" variant="primary" icon={Plus} className="px-3 sm:px-4">
             <span className="hidden sm:inline">{t("Асуудал мэдээлэх", "Report a problem")}</span>
             <span className="sm:hidden">{t("Мэдээлэх", "Report")}</span>
@@ -339,7 +341,10 @@ export function ConsoleShell({ area, children }: { area: "admin" | "staff"; chil
     <div className="space-y-3 border-t border-line pt-4">
       <div className="flex items-center justify-between">
         <LangToggle />
-        <ThemeToggle />
+        <span className="inline-flex items-center gap-1">
+          <NotificationBell />
+          <ThemeToggle />
+        </span>
       </div>
       {user && (
         <div>
