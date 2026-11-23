@@ -16,6 +16,8 @@ import { formatHours, formatNumber } from "@/lib/format";
 import { useT } from "@/lib/i18n";
 import type { Catalog } from "@/lib/catalog";
 import { DISTRICT_META, STATUS_META, STATUS_ORDER } from "@/lib/meta";
+import { fetchApi } from "@/lib/api/hooks";
+import type { ReportsResponse } from "@/lib/api/types";
 import { useNow, useStore } from "@/lib/store";
 import type { CategorySlug, Report, ReportStatus } from "@/lib/types";
 
@@ -123,10 +125,14 @@ export function HomeExplorer() {
     setParam({ status: same ? null : next.join(",") || "none" });
   };
 
-  const onTrack = (e: React.FormEvent) => {
+  const onTrack = async (e: React.FormEvent) => {
     e.preventDefault();
     const ref = track.trim().toUpperCase().replace(/\s/g, "");
-    const hit = state.reports.find((r) => r.ref === ref || r.ref.endsWith(ref.replace(/^FX-?/, "")) && ref.length >= 4);
+    let hit = state.reports.find((r) => r.ref === ref || r.ref.endsWith(ref.replace(/^FX-?/, "")) && ref.length >= 4);
+    // Not among the recent ones on this page: ask the server for that exact reference.
+    if (!hit && /^FX-\d{2}-\d{5,}$/.test(ref)) {
+      hit = (await fetchApi<ReportsResponse>(`/api/v1/reports?ref=${ref}`).catch(() => null))?.reports[0];
+    }
     if (hit && hit.visibility === "visible") router.push(`/reports/${hit.id}`);
     else setTrackError(t("Ийм дугаартай мэдээлэл олдсонгүй. Жишээ: FX-26-04101", "No report with that reference. Example: FX-26-04101"));
   };

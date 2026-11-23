@@ -283,6 +283,8 @@ export const LIMITS = {
   photosMax: 3,
   duplicateRadiusM: 50,
   duplicateDays: 90,
+  /** The public list holds every open report, and resolved or closed ones for this many days. */
+  publicHistoryDays: 90,
   autoHideFlags: 3,
   ageWarnDays: 14,
   ageDangerDays: 30,

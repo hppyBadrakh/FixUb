@@ -22,7 +22,8 @@
   // For now the binding exists only in the "dev" environment, which `npm run dev` uses with a
   // local simulated bucket (files under .wrangler/). Production gets it once R2 is enabled on
   // the Cloudflare account and the bucket exists: then move "r2_buckets" to the top level.
-  // Until then the deployed site answers 503 `not_configured` to photo requests.
+  // Until then the deployed site keeps photo bytes in Postgres (table photo_blobs); once the
+  // binding exists, new photos go to R2 and old ones move there the first time they are read.
   "env": {
     "dev": {
       "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "fixub-photos" }]

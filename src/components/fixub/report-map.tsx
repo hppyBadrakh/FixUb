@@ -17,8 +17,10 @@ import type { CategorySlug, Lang, LngLat, Report, ReportStatus } from "@/lib/typ
 import { MapClusterView, MapLegend, MapMarkerView } from "./map-marker";
 import { CategoryTag, PriorityBadge, StatusBadge } from "./status";
 
-// OpenFreeMap public style: real OpenStreetMap streets, no API key.
-const STYLE_URL = "https://tiles.openfreemap.org/styles/positron";
+// The map style (a MapLibre style JSON URL). The default is OpenFreeMap's public server: real
+// OpenStreetMap streets and no API key, but also no service guarantee. For real traffic set
+// NEXT_PUBLIC_MAP_STYLE_URL at build time to a provider you have an agreement with.
+const STYLE_URL = process.env.NEXT_PUBLIC_MAP_STYLE_URL || "https://tiles.openfreemap.org/styles/positron";
 const MAX_BOUNDS: [[number, number], [number, number]] = [
   [106.45, 47.72],
   [107.4, 48.12],

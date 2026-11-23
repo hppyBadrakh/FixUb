@@ -17,6 +17,8 @@ import { descriptionOf, placeOf, reportTitle } from "@/lib/domain/metrics";
 import { formatDateTime, timeAgo } from "@/lib/format";
 import { useT } from "@/lib/i18n";
 import { DISTRICT_META, FLAG_REASON_LABEL, OPEN_STATUSES, PRIORITY_META } from "@/lib/meta";
+import { LIVE_REFRESH_MS, useApi } from "@/lib/api/hooks";
+import type { ReportResponse } from "@/lib/api/types";
 import { useNow, useStore } from "@/lib/store";
 import type { AppState, FlagReason, Report } from "@/lib/types";
 
@@ -54,7 +56,11 @@ export function ReportDetail() {
   const [flagReason, setFlagReason] = useState<FlagReason>("spam");
   const [flagDetails, setFlagDetails] = useState("");
 
-  const report = state.reports.find((r) => r.id === id);
+  // Usually the report is already in the store's lists. An older one (the public list only goes
+  // back 90 days) is fetched on its own.
+  const listed = state.reports.find((r) => r.id === id);
+  const single = useApi<ReportResponse>(ready && !listed ? `/api/v1/reports/${id}` : null, { refreshInterval: LIVE_REFRESH_MS });
+  const report = listed ?? single.data?.report;
   const nearby = useMemo(() => {
     if (!report) return [];
     return state.reports
@@ -65,7 +71,7 @@ export function ReportDetail() {
       .slice(0, 3);
   }, [report, state.reports]);
 
-  if (!ready) return <PageSkeleton />;
+  if (!ready || (!listed && single.isLoading)) return <PageSkeleton />;
   const canSeeHidden = !!report && (user?.role === "admin" || report.reporterId === user?.id);
   if (!report || (report.visibility === "hidden" && !canSeeHidden)) {
     return (

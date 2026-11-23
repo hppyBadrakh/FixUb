@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { GET as servePhoto } from "@/app/api/v1/photos/[id]/route";
 import { POST as upload } from "@/app/api/v1/photos/route";
-import { reportImages, reports } from "@/db/schema";
+import { photoBlobs, reportImages, reports } from "@/db/schema";
 import type { UploadedPhoto } from "@/lib/api/types";
 import { withDb } from "@/server/db";
 import { AppError } from "@/server/errors";
@@ -66,7 +66,7 @@ describe.skipIf(!hasDatabase)("photo upload", () => {
     expect(new Uint8Array(await served.arrayBuffer())).toEqual(bytes);
   });
 
-  it("without an R2 bucket, keeps the photo in the database and serves it just the same", async () => {
+  it("without an R2 bucket, keeps the photo in the database; with one, moves it there on first read", async () => {
     r2.bound = false;
     try {
       const bytes = jpeg(800, 600, 20_000);
@@ -77,8 +77,16 @@ describe.skipIf(!hasDatabase)("photo upload", () => {
       const served = await get("citizen", res.data!.id);
       expect(served.status).toBe(200);
       expect(new Uint8Array(await served.arrayBuffer())).toEqual(bytes);
-      // Still readable after the bucket appears: a photo is read from where it was written.
+      // Once the bucket appears, the first read moves the photo there and empties the table row.
+      const key = `photos/${res.data!.id}.jpg`;
+      const inTable = () => withDb(async (db) => (await db.select({ key: photoBlobs.storageKey }).from(photoBlobs).where(eq(photoBlobs.storageKey, key))).length);
+      expect(await inTable()).toBe(1);
       r2.bound = true;
+      const moved = await get("citizen", res.data!.id);
+      expect(moved.status).toBe(200);
+      expect(new Uint8Array(await moved.arrayBuffer())).toEqual(bytes);
+      expect(bucketObjects.get(key)).toEqual(bytes);
+      expect(await inTable()).toBe(0);
       expect((await get("citizen", res.data!.id)).status).toBe(200);
     } finally {
       r2.bound = true;

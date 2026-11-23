@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useSWRConfig } from "swr";
-import { useApi, useLiveApi } from "./api/hooks";
+import { PUBLIC_REFRESH_MS, useApi, useLiveApi } from "./api/hooks";
 import type { ActivityResponse, CategoriesResponse, MeResponse, OrganizationsResponse, ReportsResponse, SessionUser, StaffResponse } from "./api/types";
 import { authClient } from "./auth-client";
 import { makeCatalog, type Catalog } from "./catalog";
@@ -137,11 +137,14 @@ export function FixubProvider({ children }: { children: React.ReactNode }) {
   /* ---- The lists come from /api/v1 and are re-read every 15 s ---- */
   const role = user?.role;
   const isStaff = role === "org_staff" || role === "org_manager";
-  const publicReports = useLiveApi<ReportsResponse>(on ? "/api/v1/reports" : null);
+  // The consoles need every list fresh. For everyone else the big public list is re-read once a
+  // minute (their own reports, below, stay at 15 s): most traffic is visitors looking at the map.
+  const calm = role === "admin" || isStaff ? undefined : { refreshInterval: PUBLIC_REFRESH_MS };
+  const publicReports = useLiveApi<ReportsResponse>(on ? "/api/v1/reports" : null, calm);
   const myReports = useLiveApi<ReportsResponse>(role ? "/api/v1/reports?mine=1" : null);
   const staffReports = useLiveApi<ReportsResponse>(isStaff ? "/api/v1/staff/reports" : null);
   const adminReports = useLiveApi<ReportsResponse>(role === "admin" ? "/api/v1/admin/reports" : null);
-  const organizations = useLiveApi<OrganizationsResponse>(on ? "/api/v1/organizations" : null);
+  const organizations = useLiveApi<OrganizationsResponse>(on ? "/api/v1/organizations" : null, calm);
   // Not polled: the categories editor reads the same data and must not change under the admin's hands.
   const categories = useApi<CategoriesResponse>(on ? "/api/v1/categories" : null);
   const staff = useApi<StaffResponse>(role === "admin" ? "/api/v1/admin/users" : null);
