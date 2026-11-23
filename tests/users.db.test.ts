@@ -46,12 +46,9 @@ describe.skipIf(!hasDatabase)("user management", () => {
     expect(await membershipsOf(id)).toEqual([{ organization: "org-light", role: "org_manager" }]);
     expect((await account(id))?.unitId).toBeUndefined();
 
-    expect(await give({ kind: "admin" })).toMatchObject({ ok: true });
-    expect(await account(id)).toMatchObject({ role: "admin" });
-    expect(await membershipsOf(id)).toEqual([]);
-
     expect(await give({ kind: "citizen" })).toMatchObject({ ok: true });
     expect(await account(id)).toMatchObject({ role: "citizen" });
+    expect(await membershipsOf(id)).toEqual([]);
   });
 
   it("blocking signs the account out everywhere; unblocking lets it back in", async () => {
@@ -105,6 +102,65 @@ describe.skipIf(!hasDatabase)("deleting an account", () => {
     }));
     expect(left).toEqual({ user: 0, sessions: 0, own: { reporterId: null }, other: { n: 0 }, photo: 0 });
     expect(bucketObjects.has(`photos/${loose.id}.jpg`)).toBe(false);
+  });
+});
+
+describe.skipIf(!hasDatabase)("only an owner (ADMIN_EMAILS) decides who is an admin", () => {
+  const before = process.env.ADMIN_EMAILS;
+  const restore = () => {
+    if (before === undefined) delete process.env.ADMIN_EMAILS;
+    else process.env.ADMIN_EMAILS = before;
+  };
+  afterEach(restore);
+  afterAll(cleanUpUsers);
+  afterAll(signOutEveryone);
+
+  const makeAdmin = async () => {
+    const id = await makeUser();
+    await withDb((db) => db.update(users).set({ platformRole: "admin" }).where(eq(users.id, id)));
+    return id;
+  };
+  const roleOf = async (id: string) => (await withDb((db) => db.select({ role: users.platformRole }).from(users).where(eq(users.id, id))))[0]?.role;
+
+  it("an admin who isn't an owner can't make an admin, nor change, block or delete one", async () => {
+    process.env.ADMIN_EMAILS = "";
+    const citizen = await makeUser();
+    expect(await as("admin", () => setUserAccess({ userId: citizen, access: { kind: "admin" } }))).toMatchObject({ ok: false, error: "forbidden" });
+    expect(await roleOf(citizen)).toBe("citizen");
+
+    const other = await makeAdmin();
+    expect(await as("admin", () => setUserAccess({ userId: other, access: { kind: "citizen" } }))).toMatchObject({ ok: false, error: "forbidden" });
+    expect(await as("admin", () => setUserBanned({ userId: other, banned: true }))).toMatchObject({ ok: false, error: "forbidden" });
+    expect(await as("admin", () => deleteUser({ userId: other }))).toMatchObject({ ok: false, error: "forbidden" });
+    expect(await roleOf(other)).toBe("admin");
+
+    // Everything else an admin does to non-admins still works.
+    expect(await as("admin", () => setUserAccess({ userId: citizen, access: { kind: "staff", organizationId: "org-road", role: "org_staff" } }))).toMatchObject({ ok: true });
+    expect(await as("admin", () => setUserBanned({ userId: citizen, banned: true }))).toMatchObject({ ok: true });
+  });
+
+  it("an owner makes an admin and takes it back", async () => {
+    process.env.ADMIN_EMAILS = `${PERSONAS.admin}@demo.fixub.invalid`;
+    expect(await as("admin", () => withDb(getActor))).toMatchObject({ owner: true });
+
+    const id = await makeUser();
+    const give = (access: object) => as("admin", () => setUserAccess({ userId: id, access }));
+    expect(await give({ kind: "staff", organizationId: "org-road", role: "org_staff" })).toMatchObject({ ok: true });
+    expect(await give({ kind: "admin" })).toMatchObject({ ok: true });
+    expect(await account(id)).toMatchObject({ role: "admin" });
+    expect(await membershipsOf(id)).toEqual([]);
+
+    expect(await give({ kind: "citizen" })).toMatchObject({ ok: true });
+    expect(await roleOf(id)).toBe("citizen");
+
+    const other = await makeAdmin();
+    expect(await as("admin", () => setUserBanned({ userId: other, banned: true }))).toMatchObject({ ok: true });
+  });
+
+  it("a new account is never an owner, and neither is an admin from the database", async () => {
+    process.env.ADMIN_EMAILS = "";
+    expect(await as("admin", () => withDb(getActor))).toMatchObject({ role: "admin", owner: false });
+    expect(await as("citizen", () => withDb(getActor))).toMatchObject({ role: "citizen", owner: false });
   });
 });
 
