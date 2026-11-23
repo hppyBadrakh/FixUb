@@ -180,7 +180,12 @@ export const ROUTES: Record<string, RouteRule> = {
     allowed: ["admin"],
     refusals: [{ name: "a filter that isn't one", as: "admin", url: () => "/api/v1/admin/reports?sort=sideways", status: 400 }],
   },
+  "admin/dashboard": {
+    allowed: ["admin"],
+    refusals: [{ name: "a period the overview doesn't offer", as: "admin", url: () => "/api/v1/admin/dashboard?days=5", status: 400 }],
+  },
   "admin/users": { allowed: ["admin"] },
+  "staff/dashboard": { allowed: ["org_staff", "org_manager"] },
   "staff/reports": { allowed: ["org_staff", "org_manager"] },
   "photos/[id]": {
     // A photo on a visible report. Who sees an unattached or hidden one: tests/photos.db.test.ts.

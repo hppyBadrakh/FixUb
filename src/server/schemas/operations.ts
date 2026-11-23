@@ -120,3 +120,15 @@ export const queueFiltersSchema = z.object({
   limit: z.coerce.number().int().min(1).max(QUEUE_LIMIT_MAX).default(QUEUE_LIMIT_MAX),
 });
 export type QueueFilters = z.infer<typeof queueFiltersSchema>;
+
+/* ------------------------------------------------------------------ */
+/* Dashboard (query string of the admin and staff dashboard APIs)     */
+/* ------------------------------------------------------------------ */
+
+/** The periods the overview offers: last day, 7 days, 30 days. */
+export const DASHBOARD_PERIODS = ["1", "7", "30"] as const;
+
+export const dashboardQuerySchema = z.object({
+  days: z.enum(DASHBOARD_PERIODS).default("7").transform(Number),
+});
+export type DashboardQuery = z.infer<typeof dashboardQuerySchema>;

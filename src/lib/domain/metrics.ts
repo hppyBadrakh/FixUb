@@ -91,14 +91,25 @@ export function dailySeries(reports: Report[], now: number, days = 14) {
   return { labels, incoming, resolved };
 }
 
+/**
+ * Age of open reports, in days. A bucket holds `minDays <= age < maxDays`. Shared with the SQL
+ * version (src/server/queries/dashboard.ts) so both count the same way.
+ */
+export const AGE_BUCKETS = [
+  { key: "lt2", mn: "2 хоногоос бага", en: "Under 2 days", minDays: -Infinity, maxDays: 2 },
+  { key: "2-7", mn: "2–7 хоног", en: "2–7 days", minDays: 2, maxDays: 7 },
+  { key: "7-14", mn: "7–14 хоног", en: "7–14 days", minDays: 7, maxDays: 14 },
+  { key: "14-30", mn: "14–30 хоног", en: "14–30 days", minDays: 14, maxDays: 30 },
+  { key: "gt30", mn: "30-аас дээш хоног", en: "Over 30 days", minDays: 30, maxDays: Infinity },
+] as const;
+
 export function ageBuckets(reports: Report[], now: number) {
   const open = reports.filter(isOpen);
   const d = (r: Report) => (now - r.createdAt) / 864e5;
-  return [
-    { key: "lt2", mn: "2 хоногоос бага", en: "Under 2 days", value: open.filter((r) => d(r) < 2).length },
-    { key: "2-7", mn: "2–7 хоног", en: "2–7 days", value: open.filter((r) => d(r) >= 2 && d(r) < 7).length },
-    { key: "7-14", mn: "7–14 хоног", en: "7–14 days", value: open.filter((r) => d(r) >= 7 && d(r) < 14).length },
-    { key: "14-30", mn: "14–30 хоног", en: "14–30 days", value: open.filter((r) => d(r) >= 14 && d(r) < 30).length },
-    { key: "gt30", mn: "30-аас дээш хоног", en: "Over 30 days", value: open.filter((r) => d(r) >= 30).length },
-  ];
+  return AGE_BUCKETS.map(({ key, mn, en, minDays, maxDays }) => ({
+    key,
+    mn,
+    en,
+    value: open.filter((r) => d(r) >= minDays && d(r) < maxDays).length,
+  }));
 }
