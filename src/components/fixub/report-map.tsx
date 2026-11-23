@@ -17,8 +17,10 @@ import type { CategorySlug, Lang, LngLat, Report, ReportStatus } from "@/lib/typ
 import { MapClusterView, MapLegend, MapMarkerView } from "./map-marker";
 import { CategoryTag, PriorityBadge, StatusBadge } from "./status";
 
-// OpenFreeMap public style: real OpenStreetMap streets, no API key.
-const STYLE_URL = "https://tiles.openfreemap.org/styles/positron";
+// The map style (a MapLibre style JSON URL). The default is OpenFreeMap's public server: real
+// OpenStreetMap streets and no API key, but also no service guarantee. For real traffic set
+// NEXT_PUBLIC_MAP_STYLE_URL at build time to a provider you have an agreement with.
+const STYLE_URL = process.env.NEXT_PUBLIC_MAP_STYLE_URL || "https://tiles.openfreemap.org/styles/positron";
 const MAX_BOUNDS: [[number, number], [number, number]] = [
   [106.45, 47.72],
   [107.4, 48.12],
@@ -184,7 +186,8 @@ export function ReportMap({
       if (!map?.loaded()) setPhase((p) => (p === "loading" ? "error" : p));
     }, 15000);
     (async () => {
-      const ml = await import("maplibre-gl");
+      // In the browser this is MapLibre GL; see src/lib/map-library.ts.
+      const ml = (await import("@/lib/map-library")) as unknown as typeof import("maplibre-gl");
       if (cancelled || !container.current) return;
       // Served from /public by scripts/copy-maplibre-worker.mjs; the bundler doesn't emit it.
       ml.setWorkerUrl(new URL("/vendor/maplibre-gl-worker.mjs", window.location.href).href);

@@ -6,7 +6,7 @@ import { setSessionCookie } from "better-auth/cookies";
 import * as z from "zod";
 import type { Db } from "@/db/client";
 import * as schema from "@/db/schema";
-import { DEMO_USERS } from "@/lib/data/seed";
+import { DEMO_USERS } from "@/lib/data/sample-users";
 import { serverEnv } from "./env";
 import { AppError } from "./errors";
 

@@ -24,6 +24,8 @@ import type { ErrorCode } from "@/server/errors";
 import type { ApiEnvelope } from "./types";
 
 export const LIVE_REFRESH_MS = 15_000;
+/** How often visitors and citizens re-read the public list. */
+export const PUBLIC_REFRESH_MS = 60_000;
 
 export class ApiError extends Error {
   constructor(

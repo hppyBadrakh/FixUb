@@ -83,6 +83,7 @@ Cloudflare dashboard. Never commit `.env.local` or `.dev.vars`.
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | for Google sign-in | From a Google Cloud OAuth client (type "Web application"). Redirect URI: `<BETTER_AUTH_URL>/api/auth/callback/google`. Without them the login page says Google isn't set up |
 | `DEMO_LOGIN` | development only | `true` makes this a demonstration deployment: sample users on `/login` and "Sample data" notes. Anything else turns both off, and the server refuses sample sign-ins. **Never `true` on the real site** |
 | `REVIEW_BEFORE_PUBLIC` | optional | `true`: a new report is only public once an admin has reviewed it (set its priority). Until then only its reporter, admins and assigned staff see it. Default: public at once |
+| `NEXT_PUBLIC_MAP_STYLE_URL` | optional, **build time** | A MapLibre style URL for the map. Default: OpenFreeMap's free public server (no service guarantee). Set it in the Cloudflare build's variables, not as a runtime secret |
 | `ADMIN_EMAILS` | on the real site | Comma-separated Google emails that are always admins. This is how the first admin gets in; everyone else is given access on `/admin/users` |
 
 ## How the real app is built
@@ -228,7 +229,7 @@ Photos are stored in Cloudflare R2 (the Worker binding `PHOTOS`), with one row p
 no Cloudflare account. **Production has no bucket yet**: R2 must first be enabled on the
 Cloudflare account (see the comment in `wrangler.jsonc`). Until then the deployed site keeps
 photo bytes in Postgres (table `photo_blobs`), which is fine for a small number of photos.
-Once the `PHOTOS` binding exists, new photos go to R2 and old ones are still read from the table.
+Once the `PHOTOS` binding exists, new photos go to R2 and each old one moves there the first time it is read.
 
 ## Tests
 
@@ -292,7 +293,7 @@ Pushing to `main` deploys through Cloudflare Workers Builds, using the `npm run 
   merging to `main`: Cloudflare's build has no `.env.local`.
 - Keep `cacheComponents` and `partialPrefetching` off in `next.config.ts`: with them on, every
   page returns 500 on Workers.
-- The Worker is about 2.4 MB compressed; the free plan allows 3 MB. Check
+- The Worker is about 2.45 MB compressed; the free plan allows 3 MB. Check
   `npx wrangler deploy --dry-run` before adding a large library.
 
 Requires Node 22+ and a network connection for the map tiles (OpenFreeMap / OpenStreetMap).
@@ -421,17 +422,88 @@ keeps a way to sign in.
 6. **Turn the sample login off.** Remove `DEMO_LOGIN` (or set it to anything but `true`) in the
    Cloudflare dashboard and redeploy. The sample users and the "Sample data" notes disappear and
    `/api/auth/demo/sign-in` no longer exists.
-7. **Photos.** Enable R2 on the Cloudflare account, create the bucket and move the `PHOTOS`
-   binding to the top level of `wrangler.jsonc` (see "Photos").
+7. **Photos.** Enable R2 on the Cloudflare account, create the bucket (`npx wrangler r2 bucket
+   create fixub-photos`) and move the `PHOTOS` binding to the top level of `wrangler.jsonc`.
+   Photos already stored in Postgres move to R2 by themselves the first time each is read.
+8. **Plans and monitoring.** See [Operations](#operations): the Workers paid plan, the Neon
+   plan, and who gets the Monitor workflow's emails.
 
 Not software, and still needed before real use: organizations that have agreed to act on reports,
 people to triage and moderate every day, and a reviewed privacy policy and terms (the notice in
 the report form is a plain-language summary, not a legal text).
 
+## Operations
+
+What keeps the site running, what it costs, and what to do before real traffic.
+
+### Watching it
+
+- **`GET /api/health`** answers `{ ok: true }` when the Worker runs and reaches the database, 503 otherwise.
+- **The Monitor workflow** (`.github/workflows/monitor.yml`) calls it and the main pages every
+  30 minutes. A failed run means the site is down: GitHub emails whoever watches the
+  repository's Actions (your GitHub Settings → Notifications → Actions → "Only notify for failed
+  workflows"). GitHub may delay scheduled runs by several minutes, and stops them after 60 days
+  without a commit.
+- **Errors and logs**: Cloudflare dashboard → Workers → fixub → Observability. Server errors are
+  logged with a `[server]` prefix. There is no error-tracking service or paging yet.
+
+### Backups
+
+The repository is public, so a database dump must never be stored as a workflow artifact.
+Backups are Neon's:
+
+- **Point-in-time restore**: Neon keeps the history of the production branch (6 hours on the
+  Free plan, up to 7 days on Launch, more on Scale). Restore from the Neon console → Branches.
+- **Before anything risky** (`db:go-live`, a migration that drops something): create a branch
+  of production in the Neon console first. It is a full copy and takes seconds.
+- Photos stored in R2 are not covered by either: turn on object versioning for the bucket if
+  they matter.
+
+### Limits of the free plans, and what real use needs
+
+| Limit | Free | Why it matters here |
+| --- | --- | --- |
+| Cloudflare Workers requests | 100,000 a day | An open console tab re-reads its lists every 15 s (about 6 requests): roughly 35,000 requests in a working day **per person**. A visitor's tab re-reads once a minute. Three staff with the console open all day use the whole allowance. The paid plan ($5 a month) includes 10 million requests a month |
+| Worker size | 3 MB compressed | The Worker is about 2.45 MB (check with `npx wrangler deploy --dry-run` after a build). The paid plan allows 10 MB |
+| Worker CPU time | 10 ms per request | Large lists (the admin's, with every report) are the first to hit it. The paid plan allows 30 s |
+| Neon compute and storage | 0.5 GB, compute sleeps when idle | Photos in Postgres (`photo_blobs`) fill it quickly: move them to R2. The first request after a sleep is slow |
+| R2 | 10 GB, then paid | Needs to be enabled on the account once (it asks for a payment method) |
+
+So before real use: **the Workers paid plan and R2 are needed; Neon's Launch plan is strongly advised** (7-day restore, no sleeping).
+
+Measures already in the code: tabs in the background don't poll; only the consoles poll every
+15 s; the public list holds open reports plus the last 90 days and is capped at 1,000; writes
+are rate limited per user.
+
+### A staging site
+
+Today every merge to `main` goes straight to the live site, after CI (lint, build, the server
+tests and the browser tests). To get a place to try things first:
+
+1. Neon console: create a branch `staging` from production.
+2. Cloudflare dashboard: create a second Worker (`fixub-staging`) with Workers Builds connected
+   to a `staging` Git branch, the same build and deploy commands, and its own variables:
+   `DATABASE_URL` (the staging branch), `BETTER_AUTH_SECRET` (a new one), `BETTER_AUTH_URL`
+   (its `workers.dev` address), `DEMO_LOGIN=true`. In `wrangler.jsonc` the Worker name and the
+   `WORKER_SELF_REFERENCE` service must then come from the environment being deployed.
+3. Merge to `staging` first, look, then merge to `main`.
+
+This is not set up: it needs the two dashboards.
+
+### Security
+
+- Every answer carries `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`,
+  `Permissions-Policy` (camera and location for our own pages only) and HSTS (`next.config.ts`).
+  There is no Content-Security-Policy yet.
+- Permissions are checked on the server for every action and endpoint, and the permission
+  matrix test fails when one is added without a rule.
+- Not done: a load test and an outside security review.
+
 ## Known limits
 
-- The store loads all reports the user may see and filters in the browser (up to 1,000, newest
-  first). The `?bbox=` viewport filter exists on the API but the map doesn't use it yet.
+- The store loads the reports the user may see and filters in the browser. The public list is
+  bounded (open reports plus 90 days, at most 1,000); the admin's list is not bounded by age.
+  The `?bbox=` viewport filter exists on the API but the map doesn't use it yet.
 - The dashboards and the statistics page count in SQL, but fall back to counting the loaded
   reports in the browser until the first answer arrives (same definitions, tested against each other).
 - Photos are stored in Postgres until R2 is enabled on the Cloudflare account (see "Photos").

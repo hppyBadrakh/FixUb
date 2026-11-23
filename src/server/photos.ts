@@ -48,22 +48,37 @@ function databaseBucket(db: Db | Tx): PhotoBucket {
   };
 }
 
-/** Where photo bytes go: the R2 bucket if this Worker has the `PHOTOS` binding, else Postgres. */
-export async function photoBucket(db: Db | Tx): Promise<PhotoBucket> {
+/** The R2 bucket, or null where this Worker has no `PHOTOS` binding. */
+async function r2Bucket(): Promise<PhotoBucket | null> {
   try {
     const { env } = await getCloudflareContext({ async: true });
-    const bucket = (env as unknown as { PHOTOS?: PhotoBucket }).PHOTOS;
-    if (bucket) return bucket;
+    return (env as unknown as { PHOTOS?: PhotoBucket }).PHOTOS ?? null;
   } catch {
-    // Not running on Workers and no local simulation.
+    return null; // not running on Workers and no local simulation
   }
-  return databaseBucket(db);
 }
 
-/** A photo is read from where it was written: R2 first, then the table. */
+/** Where photo bytes go: the R2 bucket if there is one, else Postgres. */
+export async function photoBucket(db: Db | Tx): Promise<PhotoBucket> {
+  return (await r2Bucket()) ?? databaseBucket(db);
+}
+
+/**
+ * Reads a photo from wherever it is. A photo stored in Postgres before the bucket existed is
+ * moved to R2 the first time it is read, so the table empties itself with use.
+ */
 async function readPhoto(db: Db | Tx, key: string) {
-  const bucket = await photoBucket(db);
-  return (await bucket.get(key)) ?? (await databaseBucket(db).get(key));
+  const fromTable = databaseBucket(db);
+  const r2 = await r2Bucket();
+  if (!r2) return fromTable.get(key);
+  const object = await r2.get(key);
+  if (object) return object;
+  const old = await fromTable.get(key);
+  if (!old) return null;
+  const bytes = new Uint8Array(await old.arrayBuffer());
+  await r2.put(key, bytes, { httpMetadata: { contentType: "image/jpeg" } });
+  await fromTable.delete(key);
+  return { arrayBuffer: async () => bytes.buffer };
 }
 
 /**

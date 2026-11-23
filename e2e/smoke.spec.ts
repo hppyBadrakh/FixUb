@@ -12,6 +12,8 @@ test("a visitor sees the public map page", async ({ page }) => {
   const res = await page.goto("/");
   expect(res?.status()).toBe(200);
   await expect(page.locator("main")).toBeVisible();
+  // The map library is loaded in the browser only (src/lib/map-library.ts): it must still arrive.
+  await expect(page.locator(".maplibregl-map").first()).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -58,4 +60,18 @@ test("a photo uploaded by a citizen is served back to them, and to nobody else y
 test("a visitor can't upload a photo", async ({ page }) => {
   const res = await page.request.post("/api/v1/photos", { headers: { "Content-Type": "image/jpeg" }, data: testJpeg() });
   expect(res.status()).toBe(401);
+});
+
+test("the health check answers, and pages carry the security headers", async ({ page }) => {
+  const health = await page.request.get("/api/health");
+  expect(health.status()).toBe(200);
+  expect(await health.json()).toMatchObject({ ok: true, database: "ok" });
+
+  for (const path of ["/", "/api/v1/categories"]) {
+    const headers = (await page.request.get(path)).headers();
+    expect(headers["x-content-type-options"], path).toBe("nosniff");
+    expect(headers["x-frame-options"], path).toBe("DENY");
+    expect(headers["referrer-policy"], path).toBe("strict-origin-when-cross-origin");
+    expect(headers["permissions-policy"], path).toContain("camera=(self)");
+  }
 });

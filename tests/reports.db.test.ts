@@ -6,7 +6,8 @@ import { GET as servePhoto } from "@/app/api/v1/photos/[id]/route";
 import { GET as listReports } from "@/app/api/v1/reports/route";
 import { GET as staffReports } from "@/app/api/v1/staff/reports/route";
 import { eq } from "drizzle-orm";
-import { users } from "@/db/schema";
+import { GET as oneReport } from "@/app/api/v1/reports/[id]/route";
+import { reports as reportsTable, users } from "@/db/schema";
 import { CONSENT_VERSION } from "@/lib/meta";
 import type { AppNotification, NotificationsResponse } from "@/lib/api/types";
 import type { Report, StatusTimelineEvent } from "@/lib/types";
@@ -108,6 +109,39 @@ describe.skipIf(!hasDatabase)("creating a report", () => {
     expect(await find("signedOut", listReports, id, "?bbox=106.70,47.80,106.75,47.85")).toBeUndefined();
     expect(await find("signedOut", listReports, id, `${near}&status=resolved`)).toBeUndefined();
     expect(await find("signedOut", listReports, id, `${near}&status=reported&category=roads`)).toBeDefined();
+  });
+});
+
+describe.skipIf(!hasDatabase)("the public list stays a bounded size", () => {
+  afterAll(cleanUpReports);
+  afterAll(signOutEveryone);
+
+  const longAgo = new Date(Date.now() - 120 * 864e5);
+  const age = (id: string) => withDb((db) => db.update(reportsTable).set({ createdAt: longAgo, statusChangedAt: longAgo }).where(eq(reportsTable.id, id)));
+
+  it("holds every open report however old, and resolved ones for 90 days", async () => {
+    const oldOpen = await makeReport();
+    const oldResolved = await makeReport({ status: "resolved" });
+    const freshResolved = await makeReport({ status: "resolved" });
+    await age(oldOpen);
+    await age(oldResolved);
+
+    const list = await read("signedOut", listReports);
+    expect(list.some((r) => r.id === oldOpen)).toBe(true);
+    expect(list.some((r) => r.id === freshResolved)).toBe(true);
+    expect(list.some((r) => r.id === oldResolved)).toBe(false);
+
+    // Still reachable: by its own address, and by its reference (the "track a report" box).
+    const res = await oneReport(new Request("http://localhost:3000/"), { params: Promise.resolve({ id: oldResolved }) });
+    expect(res.status).toBe(200);
+    const { ref } = ((await res.json()) as { data: { report: Report } }).data.report;
+    expect((await read("signedOut", listReports, `?ref=${ref.toLowerCase()}`)).map((r) => r.id)).toEqual([oldResolved]);
+    expect(await read("signedOut", listReports, "?ref=FX-00-00000")).toEqual([]);
+  });
+
+  it("refuses a reference that isn't one", async () => {
+    const res = await listReports(new Request("http://localhost:3000/api/v1/reports?ref=1%27%20or%201=1"));
+    expect(res.status).toBe(400);
   });
 });
 
