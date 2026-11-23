@@ -85,6 +85,16 @@ export const setPrioritySchema = z.object({
 export type SetPriorityInput = z.infer<typeof setPrioritySchema>;
 
 /* ------------------------------------------------------------------ */
+/* Activity feed (query string of the admin and staff activity APIs)  */
+/* ------------------------------------------------------------------ */
+
+export const activityQuerySchema = z.object({
+  /** How many events, newest first. */
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+});
+export type ActivityQuery = z.infer<typeof activityQuerySchema>;
+
+/* ------------------------------------------------------------------ */
 /* Assignment                                                          */
 /* ------------------------------------------------------------------ */
 

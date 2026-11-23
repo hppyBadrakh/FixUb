@@ -1,6 +1,6 @@
 // Shapes of the `/api/v1` responses, shared by the route handlers and the screens.
 // Types only: safe to import from client and server code.
-import type { CategoryDef, Organization, Report, Role, SubcategoryDef, User } from "@/lib/types";
+import type { ActivityEvent, CategoryDef, Organization, Report, Role, SubcategoryDef, User } from "@/lib/types";
 import type { ErrorBody } from "@/server/errors";
 
 /** Every `/api/v1` response is `{ data }` on success or `{ error }` on failure. */
@@ -117,4 +117,15 @@ export interface DashboardResponse {
 
 export interface StaffResponse {
   users: User[];
+}
+
+/* ---- GET /api/v1/admin/activity, /api/v1/staff/activity ---- */
+
+/**
+ * Recent events on the reports the caller may see, newest first, in the demo's `ActivityEvent`
+ * shape (organizations by slug). Nobody is identified: an event says what happened, and for
+ * a status change which organization (or "FixUB team") acted, never which person.
+ */
+export interface ActivityResponse {
+  events: ActivityEvent[];
 }
