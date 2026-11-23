@@ -100,7 +100,7 @@ export function AppHeader() {
   return (
     <header className="sticky top-0 z-20 border-b border-line bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/85">
       <div className="mx-auto flex h-14 max-w-[1200px] items-center gap-2 px-4 md:h-16 md:px-6">
-        <Link href="/" className="mr-2 shrink-0 rounded-sm" aria-label="FixUB — home">
+        <Link href="/" className="mr-2 shrink-0 rounded-sm" aria-label={t("FixUB — нүүр хуудас", "FixUB — home")}>
           <Wordmark />
         </Link>
         <nav aria-label={t("Үндсэн цэс", "Main")} className="hidden items-center gap-1 lg:flex">

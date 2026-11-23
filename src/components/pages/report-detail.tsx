@@ -206,7 +206,7 @@ export function ReportDetail() {
           <dl>
             <MetaRow label={t("Байршил", "Location")}>
               {placeOf(report, lang)}, {pick(DISTRICT_META[report.district].label)}
-              {report.accuracyM ? <span className="block text-caption text-ink-subtle">± {report.accuracyM} m (GPS)</span> : null}
+              {report.accuracyM ? <span className="block text-caption text-ink-subtle">± {report.accuracyM} {t("м", "m")} (GPS)</span> : null}
             </MetaRow>
             <MetaRow label={t("Ангилал", "Category")}>
               {catalog.label(report.category, lang)}

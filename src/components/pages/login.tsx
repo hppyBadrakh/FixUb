@@ -106,10 +106,18 @@ export function LoginPage() {
                 {t("Google-ээр нэвтрэх", "Sign in with Google")}
               </Button>
             ) : (
-              <Banner tone="warning" title={t("Google нэвтрэлт тохируулагдаагүй", "Google sign-in isn't set up on this server")}>
-                {t(
-                  "Серверт GOOGLE_CLIENT_ID болон GOOGLE_CLIENT_SECRET тохируулсны дараа ажиллана (.env.example-г үзнэ үү).",
-                  "It works once GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set on the server (see .env.example).",
+              <Banner tone="warning" title={t("Google-ээр нэвтрэх боломжгүй байна", "Google sign-in isn't available")}>
+                {showPicker
+                  ? t("Одоогоор доорх демо дүрүүдээс сонгон нэвтэрнэ үү.", "For now, sign in with one of the demo roles below.")
+                  : t("Түр хүлээгээд дахин оролдоно уу.", "Please try again later.")}
+                {/* The setup instructions are for whoever runs the server, not for the public. */}
+                {process.env.NODE_ENV !== "production" && (
+                  <span className="mt-1 block text-small text-ink-muted">
+                    {t(
+                      "Хөгжүүлэгчид: GOOGLE_CLIENT_ID болон GOOGLE_CLIENT_SECRET-ийг тохируулна (.env.example).",
+                      "For developers: set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET (see .env.example).",
+                    )}
+                  </span>
                 )}
               </Banner>
             )}

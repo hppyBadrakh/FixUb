@@ -13,6 +13,8 @@ export type DemoUser = keyof typeof USERS;
 
 interface Me {
   configured: boolean;
+  /** Google sign-in is set up on the server. */
+  google: boolean;
   demoLogin: boolean;
   user: { id: string; role: string } | null;
 }
