@@ -2,32 +2,114 @@
 
 import { useMemo, useState } from "react";
 import { CircleCheck, Clock, Inbox, TriangleAlert } from "lucide-react";
-import { PageSkeleton, SampleDataPill } from "@/components/ui/feedback";
+import { Button } from "@/components/ui/button";
+import { Banner, PageSkeleton, SampleDataPill } from "@/components/ui/feedback";
 import { SegmentedControl } from "@/components/ui/form";
 import { Card } from "@/components/ui/overlay";
 import { BarList, KpiCard, TrendChart } from "@/components/fixub/data";
 import { StatusDot } from "@/components/fixub/status";
+import { useLiveApi } from "@/lib/api/hooks";
+import type { StatisticsResponse } from "@/lib/api/types";
 import { ageBuckets, dailySeries, isOpen, summarize } from "@/lib/domain/metrics";
 import { formatHours } from "@/lib/format";
 import { useT } from "@/lib/i18n";
 import { DISTRICT_META, DISTRICT_ORDER, STATUS_META, STATUS_ORDER } from "@/lib/meta";
 import { useNow, useStore } from "@/lib/store";
+import type { DistrictId, Report, ReportStatus } from "@/lib/types";
+
+/** What the page shows: the same whether it was counted by the server or by the browser-only demo. */
+interface View {
+  open: number;
+  resolved: number;
+  resolvedPrev: number;
+  medianResponse: number | null;
+  openOver14: number;
+  total: number;
+  series: { labels: number[]; incoming: number[]; resolved: number[] };
+  statusCounts: { st: ReportStatus; n: number }[];
+  /** Open reports by category slug. */
+  categoryCounts: Map<string, number>;
+  districtCounts: Record<DistrictId, number>;
+  ages: { key: string; mn: string; en: string; value: number }[];
+}
+
+const AGE_LABELS = [
+  { key: "lt2", mn: "2 хоногоос бага", en: "Under 2 days" },
+  { key: "2-7", mn: "2–7 хоног", en: "2–7 days" },
+  { key: "7-14", mn: "7–14 хоног", en: "7–14 days" },
+  { key: "14-30", mn: "14–30 хоног", en: "14–30 days" },
+  { key: "gt30", mn: "30-аас дээш хоног", en: "Over 30 days" },
+] as const;
+
+/** The server's numbers (GET /api/v1/statistics, counted in SQL). */
+function fromServer(d: StatisticsResponse): View {
+  return {
+    open: d.open,
+    resolved: d.resolved,
+    resolvedPrev: d.resolvedPrev,
+    medianResponse: d.medianResponseHours,
+    openOver14: d.openOver14,
+    total: d.total,
+    series: d.series,
+    statusCounts: STATUS_ORDER.map((st) => ({ st, n: d.byStatus[st] ?? 0 })),
+    categoryCounts: new Map(d.openByCategory.map((c) => [c.category, c.count])),
+    districtCounts: d.openByDistrict,
+    ages: AGE_LABELS.map((l) => ({ ...l, value: d.openByAge[l.key] })),
+  };
+}
+
+/** The browser-only demo has no server: it counts its own reports. */
+function fromDemo(visible: Report[], now: number, days: number): View {
+  const s = summarize(visible, now, days);
+  const open = visible.filter(isOpen);
+  const categoryCounts = new Map<string, number>();
+  for (const r of open) categoryCounts.set(r.category, (categoryCounts.get(r.category) ?? 0) + 1);
+  return {
+    open: s.open,
+    resolved: s.resolved,
+    resolvedPrev: s.resolvedPrev,
+    medianResponse: s.medianResponse,
+    openOver14: s.openOver14,
+    total: visible.length,
+    series: dailySeries(visible, now, 14),
+    statusCounts: STATUS_ORDER.map((st) => ({ st, n: visible.filter((r) => r.status === st).length })),
+    categoryCounts,
+    districtCounts: Object.fromEntries(DISTRICT_ORDER.map((d) => [d, open.filter((r) => r.district === d).length])) as Record<DistrictId, number>,
+    ages: ageBuckets(visible, now),
+  };
+}
 
 export function Statistics() {
-  const { ready, state, catalog } = useStore();
+  const { ready, state, catalog, server } = useStore();
   const { lang, t, pick } = useT();
   const now = useNow(60_000);
   const [period, setPeriod] = useState<"7" | "30" | "90">("30");
-  const visible = useMemo(() => state.reports.filter((r) => r.visibility === "visible"), [state.reports]);
   const days = Number(period);
-  const s = useMemo(() => summarize(visible, now, days), [visible, now, days]);
-  const series = useMemo(() => dailySeries(visible, now, 14), [visible, now]);
+  // With a server the numbers are counted in SQL and re-read every 15 s; without one, in the browser.
+  const live = useLiveApi<StatisticsResponse>(server.configured ? `/api/v1/statistics?days=${days}` : null);
+  const view = useMemo<View | null>(() => {
+    if (server.configured) return live.data ? fromServer(live.data) : null;
+    return fromDemo(state.reports.filter((r) => r.visibility === "visible"), now, days);
+  }, [server.configured, live.data, state.reports, now, days]);
 
-  if (!ready) return <PageSkeleton />;
+  if (!ready || (server.configured && live.isLoading && !live.data)) return <PageSkeleton />;
+  if (!view) {
+    return (
+      <div className="mx-auto max-w-[1200px] px-4 py-6 md:px-6 md:py-10">
+        <Banner
+          tone="danger"
+          title={t("Статистикийг ачаалж чадсангүй", "Couldn't load the statistics")}
+          actions={<Button onClick={() => live.mutate()}>{t("Дахин оролдох", "Try again")}</Button>}
+        >
+          {live.error?.message}
+        </Banner>
+      </div>
+    );
+  }
 
-  const open = visible.filter(isOpen);
-  const statusCounts = STATUS_ORDER.map((st) => ({ st, n: visible.filter((r) => r.status === st).length }));
-  const total = visible.length || 1;
+  const { statusCounts, series, total: all } = view;
+  const s = view;
+  const total = all || 1;
   const inSum = series.incoming.reduce((a, b) => a + b, 0);
   const outSum = series.resolved.reduce((a, b) => a + b, 0);
   const periodLabel = t(`сүүлийн ${days} хоног`, `last ${days} days`);
@@ -127,7 +209,7 @@ export function Statistics() {
           <BarList
             ariaLabel={t("Ангиллаар нээлттэй мэдээлэл", "Open reports by category")}
             items={catalog.list
-              .map((c) => ({ key: c.id, label: pick(c.name), icon: catalog.icon(c.id), value: open.filter((r) => r.category === c.id).length }))
+              .map((c) => ({ key: c.id, label: pick(c.name), icon: catalog.icon(c.id), value: view.categoryCounts.get(c.id) ?? 0 }))
               .filter((i) => i.value > 0)
               .sort((a, b) => b.value - a.value)}
           />
@@ -135,13 +217,13 @@ export function Statistics() {
         <Card title={t("Дүүргээр", "Open by district")} subtitle={t("Хаана илүү их байна вэ?", "Where are they?")}>
           <BarList
             ariaLabel={t("Дүүргээр нээлттэй мэдээлэл", "Open reports by district")}
-            items={DISTRICT_ORDER.map((d) => ({ key: d, label: pick(DISTRICT_META[d].label), value: open.filter((r) => r.district === d).length })).sort((a, b) => b.value - a.value)}
+            items={DISTRICT_ORDER.map((d) => ({ key: d, label: pick(DISTRICT_META[d].label), value: view.districtCounts[d] ?? 0 })).sort((a, b) => b.value - a.value)}
           />
         </Card>
         <Card title={t("Нээлттэй мэдээллийн нас", "Age of open reports")} subtitle={t("Иргэд хэр удаан хүлээж байна вэ?", "How long have people been waiting?")}>
           <BarList
             ariaLabel={t("Насаар", "By age")}
-            items={ageBuckets(visible, now).map((b) => ({
+            items={view.ages.map((b) => ({
               key: b.key,
               label: lang === "mn" ? b.mn : b.en,
               value: b.value,
@@ -151,7 +233,9 @@ export function Statistics() {
         </Card>
       </div>
       <p className="mt-6 text-caption text-ink-subtle">
-        {t(`Тоонууд ${periodLabel}-ийн демо өгөгдөл дээр тооцоологдсон. Нуусан мэдээллийг оруулаагүй.`, `Figures are calculated from demo data (${periodLabel}). Hidden reports are excluded.`)}
+        {server.configured
+          ? t(`Тоонууд мэдээллийн сангаас (${periodLabel}) тооцоологдсон. Нуусан мэдээллийг оруулаагүй.`, `Figures are counted in the database (${periodLabel}). Hidden reports are excluded.`)
+          : t(`Тоонууд ${periodLabel}-ийн демо өгөгдөл дээр тооцоологдсон. Нуусан мэдээллийг оруулаагүй.`, `Figures are calculated from demo data (${periodLabel}). Hidden reports are excluded.`)}
       </p>
     </div>
   );

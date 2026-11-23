@@ -168,6 +168,10 @@ export const ROUTES: Record<string, RouteRule> = {
       { name: "a map box that isn't one", as: "citizen", url: () => "/api/v1/reports?bbox=1,2,x", status: 400 },
     ],
   },
+  statistics: {
+    allowed: "public",
+    refusals: [{ name: "a period that isn't offered", as: "citizen", url: () => "/api/v1/statistics?days=45", status: 400 }],
+  },
   "reports/nearby": {
     allowed: "public",
     url: () => `/api/v1/reports/nearby?lng=${PLACE.lng}&lat=${PLACE.lat}&category=roads`,
