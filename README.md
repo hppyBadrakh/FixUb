@@ -6,16 +6,17 @@ it. The FixUB team reviews each report, sets its priority and assigns it to an o
 repair unit; staff move it through the lifecycle; citizens see the result and confirm whether it's
 actually fixed.
 
-**Where the project is.** It started as a browser-only demo (all data in `localStorage`) and is
-being moved onto a real backend, screen by screen, following [TEAM_PLAN.md](TEAM_PLAN.md):
-Neon Postgres + PostGIS, Drizzle, Better Auth, Cloudflare Workers.
+**Where the project is.** Every screen reads and writes one shared Postgres database through the
+server; nothing is kept in the browser except the language and theme. It runs on Neon Postgres +
+PostGIS, Drizzle, Better Auth (Google sign-in) and Cloudflare Workers.
 
-- The database, sign-in, permissions and the pattern for APIs and server actions are in place.
-- One screen, `/admin/categories`, already reads and writes Postgres. It is the reference example.
-- Every other screen still runs on demo data in the browser until its owner converts it.
-- Without a `DATABASE_URL` the whole app still runs as the original browser-only demo.
+A deployment is one of two kinds, decided by one setting on the server:
 
-Organizations are fictional ("demo") and are not connected to any government body.
+- **Demonstration** (`DEMO_LOGIN=true`, as on a developer's machine and in CI): the database holds
+  32 sample reports and fictional organizations, the login page offers one-click sample users, and
+  screens carry a "Sample data" note.
+- **Real** (`DEMO_LOGIN` unset): people sign in with Google only, there are no sample users and
+  no "sample data" notes. See [Going live](#going-live).
 
 ## Setup
 
@@ -48,9 +49,8 @@ npm run db:seed
 npm run dev
 ```
 
-**C. No database.** Leave `DATABASE_URL` empty and run `npm run dev`: you get the browser-only demo.
-
-Open http://localhost:3000/login and pick a demo role (needs `DEMO_LOGIN=true`).
+Open http://localhost:3000/login and pick a sample user (needs `DEMO_LOGIN=true`, which
+`.env.example` sets). Without a `DATABASE_URL` the app only shows a "server not configured" page.
 
 ## Scripts
 
@@ -65,6 +65,7 @@ Open http://localhost:3000/login and pick a demo role (needs `DEMO_LOGIN=true`).
 | `npm run db:migrate` | Applies the migrations in `drizzle/` that your database hasn't run yet. Run it after every `git pull` that brings a new migration |
 | `npm run db:seed` | Loads the sample data into an **empty** database. `npm run db:seed -- --force` replaces existing data |
 | `npm run db:reset` | Drops everything, re-applies all migrations and re-seeds. On a Neon branch it asks for `-- --yes`. **Never on production** |
+| `npm run db:go-live` | Shows what removing the sample data would delete; with `-- --yes` it does it. Once, on production (see [Going live](#going-live)) |
 | `npm run db:generate` | **A only.** Turns a change in `src/db/schema.ts` into a new SQL file in `drizzle/` |
 
 ## Environment variables
@@ -80,27 +81,27 @@ Cloudflare dashboard. Never commit `.env.local` or `.dev.vars`.
 | `BETTER_AUTH_SECRET` | for sign-in | 32+ random characters: `openssl rand -base64 32`. Different in production |
 | `BETTER_AUTH_URL` | for sign-in | The site's origin, no trailing slash: `http://localhost:3000` locally, the `workers.dev` URL in production |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | for Google sign-in | From a Google Cloud OAuth client (type "Web application"). Redirect URI: `<BETTER_AUTH_URL>/api/auth/callback/google`. Without them the login page says Google isn't set up |
-| `DEMO_LOGIN` | optional | `true` shows the demo role picker on `/login`. Anything else turns it off, and the server refuses demo sign-ins |
+| `DEMO_LOGIN` | development only | `true` makes this a demonstration deployment: sample users on `/login` and "Sample data" notes. Anything else turns both off, and the server refuses sample sign-ins. **Never `true` on the real site** |
+| `ADMIN_EMAILS` | on the real site | Comma-separated Google emails that are always admins. This is how the first admin gets in; everyone else is given access on `/admin/users` |
 
 ## How the real app is built
 
 ```
-No database:  Screen → useStore().act.x() → pure function in src/lib/domain → localStorage
-Real app:     Screen → useStore().act.x() → server action → Zod → getActor() → same rules → Postgres
-              Screen ← useStore().state ← GET /api/v1/... (SWR, every 15 s) ← Postgres
+Screen → useStore().act.x() → server action → Zod → getActor() → rules → Postgres (one transaction)
+Screen ← useStore().state ← GET /api/v1/... (SWR, every 15 s) ← Postgres
 ```
 
-**Every screen reads `useStore().state` and writes through `useStore().act`**, with or without a
-database. The store ([src/lib/store.tsx](src/lib/store.tsx)) decides where the data comes from:
+**Every screen reads `useStore().state` and writes through `useStore().act`**
+([src/lib/store.tsx](src/lib/store.tsx)):
 
-- **Reading.** With a server, `state` is put together from `/api/v1`: the public reports, plus
+- **Reading.** `state` is put together from `/api/v1`: the public reports, plus
   what the signed-in user may see on top (their own reports, their organization's queue, or
   everything for an admin), re-read every 15 seconds. The server cuts each report down to what
   the caller may see (`src/server/queries/reports.ts`): other people are never identified, the
   internal priority note is only for admins and assigned staff, flags only for admins.
 - **Writing.** `await act.setPriority(report.id, "high", note)` returns `{ ok: true }` or
-  `{ ok: false, error }`. With a server it calls the server action and reads the lists again;
-  without one it runs the demo's pure function ([src/lib/store-actions.ts](src/lib/store-actions.ts)).
+  `{ ok: false, error }`: it calls the server action and reads the lists again
+  ([src/lib/store-actions.ts](src/lib/store-actions.ts)).
 
 | Endpoint | Who | What |
 | --- | --- | --- |
@@ -110,6 +111,7 @@ database. The store ([src/lib/store.tsx](src/lib/store.tsx)) decides where the d
 | `GET /api/v1/staff/reports` | staff, manager | Reports assigned to their organization; same filters |
 | `GET /api/v1/organizations`, `/categories` | everyone | Organizations with units; the category tree |
 | `GET /api/v1/admin/users` | admin | Who works for which organization |
+| `GET /api/v1/admin/accounts` | admin | Everyone who has signed in, with their access (`?q=` searches name and email) |
 | `GET /api/v1/admin/dashboard`, `/staff/dashboard` | admin; staff, manager | The overview's numbers counted in SQL (`?days=1\|7\|30`). Screens read them with `useDashboard()` |
 | `GET /api/v1/admin/activity`, `/staff/activity` | admin; staff, manager | The activity feed from the database (`?limit=`); it becomes `useStore().state.activity` |
 | `GET /api/v1/statistics` | everyone | The public statistics page counted in SQL (`?days=7\|30\|90`) |
@@ -121,6 +123,8 @@ database. The store ([src/lib/store.tsx](src/lib/store.tsx)) decides where the d
 | `setPriority`, `assignReport`, `changeStatus` | `src/server/actions/reports-admin.ts` |
 | `moderateReport`, `undoModeration` | `src/server/actions/moderation.ts` |
 | `saveOrganization`, `saveCategories` | `src/server/actions/organizations.ts`, `categories.ts` |
+| `setUserAccess`, `setUserBanned` | `src/server/actions/users.ts` |
+| `acceptTerms` | `src/server/actions/account.ts` |
 
 To add something new, copy the reference example. Each file starts with a comment explaining the pattern:
 
@@ -137,7 +141,7 @@ The building blocks (all owned by A):
 - **`withDb(fn)`** (`src/server/db.ts`): opens the database for one request and closes it. Call it
   once per route handler or server action. Workers can't keep a connection between requests.
 - **`getActor(db)`** (`src/server/actor.ts`): who is calling, or `null`. An `Actor` has the same
-  shape as the demo's `User` (`id`, `name`, `role`, `organizationId`, `unitId`), so the rules in
+  shape as the screens' `User` (`id`, `name`, `role`, `organizationId`, `unitId`), so the rules in
   `src/lib/domain` (`checkTransition`, `canWorkOn`, …) take it unchanged.
 - **Permission helpers**, which return the actor or throw:
   `requireActor(actor)` (signed in), `requireRole(actor, "admin")`,
@@ -145,7 +149,7 @@ The building blocks (all owned by A):
   they can't learn what another organization holds), and `{ manager: true }` for close / reopen.
 - **`api(fn)`** (`src/server/api.ts`) wraps a `GET` handler: `{ data }` on success, `{ error: { code, message } }` otherwise.
 - **`action(schema, input, fn)`** (`src/server/action.ts`) wraps a server action: Zod validation,
-  database, and `{ ok: false, error }` with the same error codes the demo screens already handle.
+  database, and `{ ok: false, error }` with a code the screens have a text for.
 - **`AppError`** (`src/server/errors.ts`): `throw new AppError("not_found")` anywhere on the server.
 - **`rateLimit(db, actor, "report.create")`** (`src/server/rate-limit.ts`): call it in every server
   action that writes, right after the permission check. It counts the write for that user and
@@ -154,8 +158,8 @@ The building blocks (all owned by A):
 - **Photos** (`src/server/photos.ts`, `src/lib/api/photos.ts`): see "Photos" below.
 - **`useApi<T>(path)`** (`src/lib/api/hooks.ts`): SWR. Call `mutate()` after a server action.
 - **`useLiveApi<T>(path)`**: the same, re-read every 15 s while the tab is visible. Use it for
-  everything other people change (map, lists, queues, a report's timeline): it replaces the
-  demo's cross-tab sync and works across devices. `useFreshIds(data?.reports, "updatedAt")`
+  everything other people change (map, lists, queues, a report's timeline), so a change on one
+  device shows up on every other. `useFreshIds(data?.reports, "updatedAt")`
   gives the ids that just changed, for the `fx-fresh` highlight (instead of `useStore().freshIds`).
   Don't poll a form the user is editing.
 - **`useStore().server.configured`** tells a screen whether there is a database, for the few
@@ -163,14 +167,22 @@ The building blocks (all owned by A):
 
 **Database rules.** Only A edits `src/db/schema.ts` and creates migrations. Need a column? Ask in
 chat. Ids: reports, organizations and units are UUIDs; users are text; categories and subcategories
-are exposed by their slug (`roads`, `pothole`), which is what the demo already used as ids. Seeded
+are exposed by their slug (`roads`, `pothole`), organizations and units too (`org-road`). Seeded
 rows have stable ids, so links survive `db:reset`.
 
-**Sign-in.** Better Auth serves `/api/auth/*` and stores users and sessions in our Postgres.
-`GET /api/v1/me` returns who is signed in and what the server supports; the client store
-(`useStore().user`) uses it whenever a database is configured. Demo personas exist in the database
-with the same ids as in the demo (`u-citizen`, `u-admin`, `u-road-staff`, …), so unconverted
-screens keep working after a demo login.
+**Sign-in and access.** Better Auth serves `/api/auth/*` and stores users and sessions in our
+Postgres; Google is the only way in. `GET /api/v1/me` returns who is signed in.
+
+- Everyone who signs in is a **citizen**. Before their first report they accept a short notice
+  about what becomes public (`users.consented_at`; change `CONSENT_VERSION` in `src/lib/meta.ts`
+  to ask everyone again).
+- An admin gives people their access on **`/admin/users`**: staff or manager of one organization
+  (and unit), or admin. The person has to have signed in once so that they are in the list.
+  Admins can also block an account, which signs it out everywhere.
+- An admin can't change or block their own account, so one admin can't lock everybody out.
+- The first admin comes from `ADMIN_EMAILS` on the server.
+- On a demonstration deployment the sample users (`u-citizen`, `u-admin`, `u-road-staff`, …) are
+  also offered on `/login`.
 
 ## Photos
 
@@ -191,7 +203,7 @@ Photos are stored in Cloudflare R2 (the Worker binding `PHOTOS`), with one row p
 `npm run dev` uses a simulated bucket on your disk (`.wrangler/`), so uploads work locally with
 no Cloudflare account. **Production has no bucket yet**: R2 must first be enabled on the
 Cloudflare account (see the comment in `wrangler.jsonc`). Until then the deployed site keeps
-photo bytes in Postgres (table `photo_blobs`), which is fine for a demo's worth of photos.
+photo bytes in Postgres (table `photo_blobs`), which is fine for a small number of photos.
 Once the `PHOTOS` binding exists, new photos go to R2 and old ones are still read from the table.
 
 ## Tests
@@ -199,8 +211,8 @@ Once the `PHOTOS` binding exists, new photos go to R2 and old ones are still rea
 `npm test` runs the server-side tests in `tests/` with Vitest. CI runs them on every pull request.
 
 - They use the database in your `.env.local` (your own Neon branch, or local Docker) and need
-  `DEMO_LOGIN=true` and the seed, because they sign in as the demo personas through the real
-  demo-login endpoint. Without `DATABASE_URL` only the tests that need no database run.
+  `DEMO_LOGIN=true` and the seed, because they sign in as the sample users through the real
+  sample-login endpoint. Without `DATABASE_URL` only the tests that need no database run.
 - Photos go to an in-memory stand-in for the R2 bucket, so no Cloudflare account is needed.
 - They clean up after themselves (sessions, rate-limit counters, photos). Allowed calls really run, so
   the inputs in the matrix must be safe to repeat.
@@ -221,7 +233,8 @@ Once the `PHOTOS` binding exists, new photos go to R2 and old ones are still rea
 - **`db:migrate` or the app can't connect to the local database:** is Docker running?
   `npm run db:up`, then `docker compose ps` should show `db` (healthy) and `ws-proxy`.
 - **Can't connect to Neon:** `DATABASE_WS_PROXY` must be empty, and use the *pooled* connection string.
-- **Demo login says the users are missing:** run `npm run db:seed`.
+- **Sample login says the users are missing, or reporting says "accept the notice":** your
+  database was seeded before a change to the seed. Run `npm run db:reset` (add `-- --yes` on Neon).
 
 ### End-to-end tests
 
@@ -275,39 +288,39 @@ or sign-in is refused (the origin must match).
 On plain `http://<your-ip>` the in-page camera is blocked; phones then get an explicit
 "Open phone camera" button that opens the camera app directly (never the photo gallery).
 
-## A 5-minute demo script
+## A 5-minute walk-through
 
-This walks through the screens that still run on demo data in the browser. Open two browser tabs
-side by side. Changes in one tab appear in the other immediately.
+On a demonstration deployment (sample users on `/login`). Use two browsers, or a normal and a
+private window, so you can be two people at once. A change in one appears in the other within
+15 seconds.
 
-1. **Tab 1 — citizen.** Go to `/login` → **Бат (Citizen)**. Press **Асуудал мэдээлэх / Report a
+1. **Browser 1 — citizen.** `/login` → **Бат (Citizen)**. Press **Асуудал мэдээлэх / Report a
    problem**. The camera opens straight away: take a photo (retake if needed), choose a category
    and then a subcategory, confirm the location on the map (search "Gandan" or move the map), add a
    description and submit. The report starts as **Pending review**; there is no priority choice
    for citizens. Note the reference (e.g. `FX-26-04133`).
    - Choose *Roads → Pothole* near Peace Avenue / School No. 3 to see the duplicate check.
-2. **Tab 2 — admin.** `/login` → **Х. Бадрах (FixUB admin)**. The report is in the review queue on
-   `/admin`. Open it, set the **priority** (Low / Medium / High / Critical, with an optional internal
-   note), then choose an organization and repair unit and **Assign**.
-3. **Tab 2 — staff.** Switch role to the matching staff persona (e.g. **Э. Ганбаатар**, Street
-   Lighting). The report is in `/staff`, most urgent first, showing the admin's priority (staff
-   can't change it). Move it to *Investigating* → *In progress* → *Resolved* with a public note and
-   a completion photo taken with the camera.
-4. **Tab 1 — citizen.** The report page and `/my-reports` show the new status, the priority, the
+2. **Browser 2 — admin.** `/login` → **Х. Бадрах (FixUB admin)**. The report is in the review queue
+   on `/admin`. Open it, set the **priority** (Low / Medium / High / Critical, with an optional
+   internal note), then choose an organization and repair unit and **Assign**.
+3. **Browser 2 — staff.** Sign in as the matching staff user (e.g. **Г. Бат-Эрдэнэ**, Road
+   Maintenance). The report is in `/staff`, most urgent first, showing the admin's priority (staff
+   can't change it). Move it to *In progress* → *Resolved* with a public note and a completion
+   photo taken with the camera.
+4. **Browser 1 — citizen.** The report page and `/my-reports` show the new status, the priority, the
    timeline with public notes, and "Is it actually fixed?". Answer it.
 5. Also worth showing: clicking a map marker (its info panel opens directly), `/admin/reports`
-   filters (status, priority, category, subcategory, district) and sorting, `/admin/categories`
-   (rename, reorder, add categories and subcategories), `/statistics`, `/admin/moderation`, the
-   МН/EN toggle, dark mode, and a 360–390 px phone width.
+   filters and sorting, `/admin/categories`, `/admin/users`, `/statistics`, `/admin/moderation`,
+   the МН/EN toggle, dark mode, and a 360–390 px phone width.
 
-**Reset demo data** (on `/login` or in the admin sidebar) restores the 32 seeded reports.
+To put the sample data back: `npm run db:reset` (your own database only, never production).
 
 ## Categories and priority
 
 - Eight main categories, each with its own subcategories (Roads and streets, Sidewalks and
   pedestrian areas, Street lighting and electricity, Waste and cleanliness, Water and drainage,
   Public infrastructure, Green spaces, Other). Both are required and stored on every report. The
-  tree lives in demo state and is editable at `/admin/categories`; categories or subcategories that
+  tree is editable at `/admin/categories`; categories or subcategories that
   reports use can be renamed and reordered but not removed. Defaults are in `src/lib/meta.ts`.
 - Priority (`low` · `medium` · `high` · `critical`) is set only by admins. New reports have
   `priority: null`, shown everywhere as **Pending review**. The admin's decision (who, when, and an
@@ -338,29 +351,58 @@ src/app/                     routes: (public) site, /admin console, /staff conso
 src/app/api/auth/            Better Auth endpoints (sign-in, callback, sign-out)
 src/app/api/v1/              read endpoints (GET), one folder per resource; photos/ also takes uploads
 src/server/                  server-only code: db, auth, actor + permissions, errors, api/action wrappers
-src/server/actions/          server actions (writes), one per demo action
+src/server/actions/          server actions (writes)
 src/server/queries/          SQL for the read endpoints
 src/db/                      Drizzle schema, database client, seed
 drizzle/                     SQL migrations (generated; only A adds them)
-scripts/db/                  db:migrate, db:seed, db:reset
+scripts/db/                  db:migrate, db:seed, db:reset, db:go-live
 src/lib/api/                 useApi() hook, uploadPhoto() and the API's response types
 src/components/ui/           design-system primitives (Button, form controls, Dialog, Sheet, Toasts…)
 src/components/fixub/        FixUB components (StatusBadge, ReportCard, StatusTimeline, ReportMap, KpiCard…)
 src/components/pages/        one client component per screen
-src/lib/domain/              pure rules: lifecycle, actions, metrics, geo — no React, no storage
-src/lib/data/                seed data, localStorage repository, IndexedDB photo store
-src/lib/store.tsx            React provider: state (from /api/v1, or demo data), session
-src/lib/store-actions.ts     useStore().act: server actions, or the demo's pure functions
+src/lib/domain/              pure rules: lifecycle, rules, metrics, geo — no React, no storage
+src/lib/data/                the sample data set that `npm run db:seed` loads
+src/lib/store.tsx            React provider: state (from /api/v1), session
+src/lib/store-actions.ts     useStore().act: one function per server action
 src/lib/i18n.tsx             Mongolian-first МН/EN toggle
 ```
 
-Every demo mutation is a pure function in `src/lib/domain/actions.ts` taking
-`(state, user, input, now)`. Each one becomes a server action in `src/server/actions/` that keeps
-the same rules and error codes, so converting a screen means swapping its data source, not
-rewriting it (see "How the real app is built").
+The rules that screens and server share are pure functions in `src/lib/domain/` (who may make
+which status change, what a valid category tree is, which reports count as open). Server actions
+call them inside a transaction; screens call them to show only what is allowed.
 
 Visual tokens, components and copy follow the FixUB Design System v1.0 (Golos Text, Tengri navy,
 five status colours with icon + word, Lucide icons).
+
+## Going live
+
+What turns a demonstration deployment into the real service. Do it in this order: each step
+keeps a way to sign in.
+
+1. **Google sign-in works on the site.** `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` are set and
+   the OAuth client's redirect URI is `<site>/api/auth/callback/google`.
+2. **Name the first admins.** Set `ADMIN_EMAILS` (comma-separated Google emails) as a secret in
+   the Cloudflare dashboard and redeploy. Sign in with Google and check that `/admin/users` opens.
+3. **Set up the real organizations** on `/admin/organizations` and adjust `/admin/categories`.
+4. **Give staff their access.** Each person signs in with Google once; then an admin sets their
+   organization, unit and role on `/admin/users`.
+5. **Remove the sample data.** Take a backup (a Neon branch is enough), then, with `DATABASE_URL`
+   pointing at production:
+   ```bash
+   npm run db:go-live           # shows what would be deleted
+   npm run db:go-live -- --yes  # deletes all reports, the sample users and sample organizations
+   ```
+   It keeps the category tree, real accounts and real organizations, and refuses to run while
+   there is no real account. It can't be undone.
+6. **Turn the sample login off.** Remove `DEMO_LOGIN` (or set it to anything but `true`) in the
+   Cloudflare dashboard and redeploy. The sample users and the "Sample data" notes disappear and
+   `/api/auth/demo/sign-in` no longer exists.
+7. **Photos.** Enable R2 on the Cloudflare account, create the bucket and move the `PHOTOS`
+   binding to the top level of `wrangler.jsonc` (see "Photos").
+
+Not software, and still needed before real use: organizations that have agreed to act on reports,
+people to triage and moderate every day, and a reviewed privacy policy and terms (the notice in
+the report form is a plain-language summary, not a legal text).
 
 ## Known limits
 

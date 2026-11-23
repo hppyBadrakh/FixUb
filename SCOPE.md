@@ -1,6 +1,6 @@
 # FixUB — Scope and Business Processes
 
-The prototype is the source of truth. This file describes what it does and where it is headed. Rules live in `src/lib/domain/` (`actions.ts`, `lifecycle.ts`).
+This file describes what FixUB does and where it is headed. The rules live in `src/lib/domain/` (`lifecycle.ts`, `rules.ts`) and in the server actions (`src/server/actions/`).
 
 ## Purpose
 
@@ -23,8 +23,7 @@ FixUB is the middleman: it receives, triages, routes and publishes.
 
 ## Out of scope (current)
 
-- Backend, real sign-in and server-side authorization. Everything runs in the browser (localStorage and IndexedDB) and sign-in is a role picker.
-- Any connection to a real government body. Organizations are fictional.
+- Any connection to a real government body. No organization has agreed to act on reports yet; the sample organizations are fictional.
 - Email, SMS or push notifications.
 - Emergency handling. FixUB is not an emergency service.
 - Proof that a photo is genuine. Camera-only capture discourages abuse and can't guarantee it.
@@ -80,12 +79,13 @@ Rules:
 - No notifications, overdue timers or auto-close.
 - No "awaiting reply" or "unrouted" status.
 - Priority is shown on public pages. Decide whether it should stay public.
-- Verdict and "me too" counts can be inflated, since sign-in is a demo role picker.
+- A "disputed" event (when "not fixed" overtakes "fixed") is not recorded anywhere yet.
 
 ## Next steps
 
-1. Fix the gaps above.
-2. Replace the browser storage with a real backend. The UI already goes only through `FixubRepository` (`src/lib/data/repository.ts`), so screens don't need rewriting.
-3. Add real sign-in and server-side role checks, running the same rules from `src/lib/domain/`.
-4. Add notifications.
-5. Connect real organizations.
+Done: a real backend (Postgres), Google sign-in, server-side role checks, account management by admins, and a consent notice before the first report.
+
+1. Go live: the checklist is in the README, "Going live".
+2. Fix the gaps above.
+3. Add notifications.
+4. Connect real organizations.

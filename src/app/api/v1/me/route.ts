@@ -20,6 +20,7 @@ function toSessionUser(actor: Actor | null): SessionUser | null {
     unitId: actor.unitId ?? null,
     organizationSlug: membership?.organizationSlug ?? null,
     unitSlug: membership?.unitSlug ?? null,
+    consented: actor.consented,
   };
 }
 

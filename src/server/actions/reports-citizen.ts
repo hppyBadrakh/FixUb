@@ -39,6 +39,8 @@ const findByRequest = async (db: Db | Tx, reporterId: string, requestId: string)
 export async function createReport(input: unknown) {
   return action(createReportSchema, input, async ({ db, input }) => {
     const actor = requireActor(await getActor(db));
+    // A report is public the moment it is filed: the person must have been told so first.
+    if (!actor.consented) throw new AppError("consent_required");
     const requestId = await requestUuid(input.clientRequestId);
     const existing = await findByRequest(db, actor.id, requestId);
     if (existing) return { report: existing };

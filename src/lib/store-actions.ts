@@ -7,6 +7,7 @@
 //   const res = await act.setPriority(report.id, "high", note);
 //   if (!res.ok) toast(errorText(res.error));
 import type { ActionResult } from "@/server/action";
+import { acceptTerms } from "@/server/actions/account";
 import { moderateReport, undoModeration } from "@/server/actions/moderation";
 import { saveOrganization } from "@/server/actions/organizations";
 import { assignReport, changeStatus, setPriority } from "@/server/actions/reports-admin";
@@ -14,11 +15,14 @@ import { createReport, flagReport, setVerdict, toggleMeToo } from "@/server/acti
 import type { ErrorCode } from "@/server/errors";
 import { uploadPhoto } from "./api/photos";
 import type { ChangeStatusInput, CreateReportInput } from "./domain/rules";
+import { CONSENT_VERSION } from "./meta";
 import type { FlagReason, Organization, Priority, Report, Verdict } from "./types";
 
 export type ActResult<T = object> = ({ ok: true } & T) | { ok: false; error: ErrorCode };
 
 export interface StoreActions {
+  /** Accept the notice shown before a first report. */
+  acceptTerms(): Promise<ActResult>;
   createReport(input: CreateReportInput): Promise<ActResult<{ report: Pick<Report, "id" | "ref"> }>>;
   toggleMeToo(reportId: string): Promise<ActResult>;
   /** `null` takes the answer back. */
@@ -57,6 +61,7 @@ export function storeActions(refresh: () => Promise<unknown>): StoreActions {
     return res;
   }
   return {
+    acceptTerms: () => call(() => acceptTerms({ version: CONSENT_VERSION })),
     createReport: (input) => call(() => createReport(input)),
     toggleMeToo: (reportId) => call(() => toggleMeToo({ reportId })),
     setVerdict: (reportId, verdict) => call(() => setVerdict({ reportId, verdict })),

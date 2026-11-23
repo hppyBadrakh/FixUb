@@ -19,6 +19,8 @@ export interface SessionUser {
   /** The same as slugs ("org-road", "unit-road-a"), which is how the API identifies them. */
   organizationSlug: string | null;
   unitSlug: string | null;
+  /** Accepted the current notice about what a report makes public. */
+  consented: boolean;
 }
 
 export interface MeResponse {
@@ -145,4 +147,28 @@ export interface StatisticsResponse extends Pick<DashboardResponse, "now" | "day
   openByCategory: Record<string, number>;
   /** Open visible reports per district. */
   openByDistrict: Record<string, number>;
+}
+
+/* ---- GET /api/v1/admin/accounts ---- */
+
+/** A person who has signed in, and what they may do. Organization and unit are slugs. */
+export interface Account {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  organizationId?: string;
+  unitId?: string;
+  /** Blocked: signed out everywhere and can't sign in. */
+  banned: boolean;
+  /** An admin through ADMIN_EMAILS on the server: the Users page can't change that. */
+  fixedAdmin: boolean;
+  createdAt: number;
+}
+
+export interface AccountsResponse {
+  /** At most 200, admins and staff first. */
+  accounts: Account[];
+  /** How many accounts match the search in all. */
+  total: number;
 }

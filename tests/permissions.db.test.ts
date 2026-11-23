@@ -6,6 +6,7 @@ import type { ActionResult } from "@/server/action";
 import { as, EVERYONE, hasDatabase, ROLE_PERSONA, signOutEveryone, type Persona } from "./helpers/personas";
 import { cleanUpPhotos } from "./helpers/photos";
 import { cleanUpReports } from "./helpers/reports";
+import { cleanUpUsers } from "./helpers/users";
 import { ACTIONS, ROUTES, WRITE_ROUTES, type RouteRule } from "./permission-matrix";
 
 type Action = (input: unknown) => Promise<ActionResult>;
@@ -67,6 +68,7 @@ describe("the permission matrix is complete", () => {
 
 describe.skipIf(!hasDatabase)("server actions refuse the wrong role", () => {
   afterAll(signOutEveryone);
+  afterAll(cleanUpUsers);
   afterAll(cleanUpPhotos);
   afterAll(cleanUpReports);
 

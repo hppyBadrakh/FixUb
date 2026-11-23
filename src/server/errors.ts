@@ -4,7 +4,7 @@
 import type { ActionError } from "@/lib/domain/rules";
 
 /** The rule violations (src/lib/domain/rules.ts), plus the errors only a server can produce. */
-export type ErrorCode = ActionError | "not_configured" | "rate_limited" | "internal";
+export type ErrorCode = ActionError | "consent_required" | "not_configured" | "rate_limited" | "internal";
 
 const STATUS: Record<ErrorCode, number> = {
   signed_out: 401,
@@ -13,6 +13,8 @@ const STATUS: Record<ErrorCode, number> = {
   not_found: 404,
   conflict: 409,
   rate_limited: 429,
+  // Signed in, but hasn't accepted the notice shown before a first report.
+  consent_required: 403,
   not_configured: 503,
   internal: 500,
   invalid_input: 400,
@@ -38,6 +40,7 @@ const DEFAULT_MESSAGE: Partial<Record<ErrorCode, string>> = {
   not_found: "Not found.",
   conflict: "Someone else changed this at the same time. Reload and try again.",
   rate_limited: "Too many requests. Try again later.",
+  consent_required: "Accept the notice about what becomes public before reporting.",
   not_configured: "The server is not configured for this.",
   internal: "Something went wrong on the server.",
   invalid_input: "The request is not valid.",

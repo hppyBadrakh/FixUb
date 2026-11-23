@@ -35,12 +35,16 @@ interface StoreValue {
   act: StoreActions;
   /** The signed-in user (the server's session), or null. */
   user: User | null;
+  /** The user has accepted the notice about what a report makes public (`act.acceptTerms()`). */
+  consented: boolean;
   server: ServerInfo;
   /** Sign in as one of the sample users. Only works where the server has DEMO_LOGIN=true. */
   signInAsSample: (userId: string) => Promise<SignInResult>;
   /** Start Google sign-in; the browser leaves the page. `next` is where to land afterwards. */
   signInWithGoogle: (next?: string) => Promise<SignInResult>;
   signOut: () => Promise<void>;
+  /** Reads everything from the server again. `act` does it itself after each write. */
+  refresh: () => Promise<unknown>;
   /** Reports changed in the last ~1.6 s (by anyone) — for the highlight wash. */
   freshIds: ReadonlySet<string>;
   /** Category and subcategory lookups (the tree is editable by admins). */
@@ -200,8 +204,8 @@ export function FixubProvider({ children }: { children: React.ReactNode }) {
   const catalog = useMemo(() => makeCatalog(state.categories), [state.categories]);
 
   const value = useMemo<StoreValue>(
-    () => ({ catalog, ready, state, act, user, server, signInAsSample, signInWithGoogle, signOut, freshIds }),
-    [ready, state, act, user, server, signInAsSample, signInWithGoogle, signOut, freshIds, catalog],
+    () => ({ catalog, ready, state, act, user, consented: !!sessionUser?.consented, server, signInAsSample, signInWithGoogle, signOut, refresh, freshIds }),
+    [ready, state, act, user, sessionUser, server, signInAsSample, signInWithGoogle, signOut, refresh, freshIds, catalog],
   );
 
   // No answer at all, or a server without a database: there is nothing to show.

@@ -265,6 +265,12 @@ export const ROLE_LABEL: Record<"citizen" | "admin" | "org_staff" | "org_manager
 export const SERVICE_AREA = { west: 106.6, south: 47.8, east: 107.25, north: 48.05 };
 export const UB_CENTER: LngLat = { lng: 106.917, lat: 47.918 };
 
+/**
+ * The version of the notice a person accepts before their first report (what becomes public).
+ * Change it when the text in the report form changes: everyone is then asked again.
+ */
+export const CONSENT_VERSION = "2026-11";
+
 export const LIMITS = {
   descriptionMin: 10,
   descriptionMax: 1000,

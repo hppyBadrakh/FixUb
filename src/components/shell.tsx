@@ -21,6 +21,7 @@ import {
   User as UserIcon,
   Inbox,
   Tags,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import { Button, ButtonLink, IconButton } from "@/components/ui/button";
@@ -284,6 +285,7 @@ export function ConsoleShell({ area, children }: { area: "admin" | "staff"; chil
           },
           { href: "/admin/organizations", mn: "Байгууллагууд", en: "Organizations", icon: Building2 },
           { href: "/admin/categories", mn: "Ангилал", en: "Categories", icon: Tags },
+          { href: "/admin/users", mn: "Хэрэглэгчид", en: "Users", icon: Users },
           {
             href: "/admin/moderation",
             mn: "Хяналт",

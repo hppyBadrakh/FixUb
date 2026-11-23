@@ -6,6 +6,7 @@
 import { createHash } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { buildSeedState } from "../lib/data/seed";
+import { CONSENT_VERSION } from "../lib/meta";
 import type { DemoState, StatusTimelineEvent } from "../lib/types";
 import type { Db } from "./client";
 import * as s from "./schema";
@@ -82,6 +83,8 @@ export async function seedDatabase(db: Db, now: number = Date.now()): Promise<Se
         email: seedEmail(u.id),
         emailVerified: true,
         platformRole: u.role === "admin" ? ("admin" as const) : ("citizen" as const),
+        consentedAt: createdAt,
+        consentVersion: CONSENT_VERSION,
         createdAt,
         updatedAt: createdAt,
       })),
