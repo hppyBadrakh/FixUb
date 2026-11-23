@@ -407,6 +407,10 @@ five status colours with icon + word, Lucide icons).
 What turns a demonstration deployment into the real service. Do it in this order: each step
 keeps a way to sign in.
 
+**Production (ubfix.site) went live on 2026-11-23:** steps 1, 2, 5, 6 and 7 are done. The sample
+data is kept on the Neon branch `backup-before-go-live-2026-11-23`. Steps 3, 4 and 8 wait for
+real partner organizations, their staff, and the plan decisions.
+
 1. **Google sign-in works on the site.** `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` are set and
    the OAuth client's redirect URI is `<site>/api/auth/callback/google`.
 2. **Name the first admins.** Set `ADMIN_EMAILS` (comma-separated Google emails) as a secret in
