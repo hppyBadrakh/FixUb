@@ -110,6 +110,9 @@ database. The store ([src/lib/store.tsx](src/lib/store.tsx)) decides where the d
 | `GET /api/v1/staff/reports` | staff, manager | Reports assigned to their organization; same filters |
 | `GET /api/v1/organizations`, `/categories` | everyone | Organizations with units; the category tree |
 | `GET /api/v1/admin/users` | admin | Who works for which organization |
+| `GET /api/v1/admin/dashboard`, `/staff/dashboard` | admin; staff, manager | The overview's numbers counted in SQL (`?days=1\|7\|30`). Screens read them with `useDashboard()` |
+| `GET /api/v1/admin/activity`, `/staff/activity` | admin; staff, manager | The activity feed from the database (`?limit=`); it becomes `useStore().state.activity` |
+| `GET /api/v1/statistics` | everyone | The public statistics page counted in SQL (`?days=7\|30\|90`) |
 | `POST /api/v1/photos`, `GET /api/v1/photos/{id}` | see "Photos" | Upload and show photos |
 
 | Server actions | File |
@@ -228,6 +231,8 @@ time, install the browser: `npx playwright install chromium`.
 - It starts `npm run dev` on port 3000 itself, or uses the one you already have running. Same
   needs as `npm test`: your database, `DEMO_LOGIN=true`, the seed.
 - `e2e/smoke.spec.ts` covers what runs on the database today (sign-in, categories, photo upload).
+- `e2e/mobile.spec.ts` opens the citizen screens on a 360 px phone, in Mongolian and English,
+  and fails if a page scrolls sideways or throws.
 - `e2e/full-loop.spec.ts` is the full loop on three separate browsers: a citizen reports with a
   photo, an admin sets the priority and assigns it, staff resolve it with a completion photo, and
   the citizen sees that without reloading and confirms the fix. Chromium runs with a fake camera.
@@ -361,7 +366,8 @@ five status colours with icon + word, Lucide icons).
 
 - The store loads all reports the user may see and filters in the browser (up to 1,000, newest
   first). The `?bbox=` viewport filter exists on the API but the map doesn't use it yet.
-- The activity feed is derived from report timelines, so "me too", flags and hiding don't appear in it.
+- The dashboards and the statistics page count in SQL, but fall back to counting the loaded
+  reports in the browser until the first answer arrives (same definitions, tested against each other).
 - Photos are stored in Postgres until R2 is enabled on the Cloudflare account (see "Photos").
 - Google sign-in needs a Google OAuth client to be configured; there is no consent screen yet.
 - Place search uses a small built-in list of Ulaanbaatar landmarks (no geocoding API).

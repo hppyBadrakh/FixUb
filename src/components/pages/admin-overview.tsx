@@ -9,6 +9,7 @@ import { SegmentedControl } from "@/components/ui/form";
 import { Card } from "@/components/ui/overlay";
 import { ActivityFeed, BarList, KpiCard, ReportTable, TrendChart, sortReports, type SortKey } from "@/components/fixub/data";
 import { ReportMap } from "@/components/fixub/report-map";
+import { useDashboard } from "@/lib/api/dashboard";
 import { ageBuckets, dailySeries, isOpen, summarize } from "@/lib/domain/metrics";
 import { formatHours } from "@/lib/format";
 import { useT } from "@/lib/i18n";
@@ -32,28 +33,37 @@ export function AdminOverview() {
   const now = useNow(15_000);
   const [range, setRange] = useState<"1" | "7" | "30">("7");
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "priority", dir: "desc" });
-  const days = Number(range);
+  const days = Number(range) as 1 | 7 | 30;
+  // With a server these numbers are counted in SQL; until they arrive (and in the browser-only
+  // demo) the same definitions run here on the loaded reports.
+  const dashboard = useDashboard("admin", days);
 
   const visible = useMemo(() => state.reports.filter((r) => r.visibility === "visible"), [state.reports]);
-  const s = useMemo(() => summarize(visible, now, days), [visible, now, days]);
-  const series = useMemo(() => dailySeries(visible, now, 14), [visible, now]);
+  const s = useMemo(() => dashboard?.summary ?? summarize(visible, now, days), [dashboard, visible, now, days]);
+  const series = useMemo(() => dashboard?.series ?? dailySeries(visible, now, 14), [dashboard, visible, now]);
+  const ages = useMemo(() => dashboard?.ageBuckets ?? ageBuckets(visible, now), [dashboard, visible, now]);
   const triage = useMemo(
     // Needs the admin: no priority yet, or no responsible organization yet.
     () => sortReports(visible.filter((r) => OPEN_STATUSES.includes(r.status) && (!r.priority || !r.organizationId)), sort, lang, catalog),
     [visible, sort, lang, catalog],
   );
   const openReports = useMemo(() => visible.filter(isOpen), [visible]);
-  const flagged = state.reports.filter((r) => r.flags.some((f) => f.status === "open")).length;
+  const flagged = dashboard?.flagged ?? state.reports.filter((r) => r.flags.some((f) => f.status === "open")).length;
 
   if (!ready) return <PageSkeleton />;
 
   const comparison = t(` өмнөх ${days} хоногтой харьцуулахад`, ` vs previous ${days === 1 ? "day" : `${days} days`}`);
   const inSum = series.incoming.reduce((a, b) => a + b, 0);
   const outSum = series.resolved.reduce((a, b) => a + b, 0);
+  // Open reports per unit, and per organization for those without a unit.
+  const openFor = (organizationId: string, unitId: string | null) =>
+    dashboard
+      ? (dashboard.workload.find((w) => w.organizationId === organizationId && w.unitId === unitId)?.open ?? 0)
+      : openReports.filter((r) => r.organizationId === organizationId && (r.unitId ?? null) === unitId).length;
   const workload = state.organizations
     .flatMap((o) => [
-      ...o.units.map((u) => ({ key: u.id, label: pick(u.name), value: openReports.filter((r) => r.unitId === u.id).length })),
-      { key: `${o.id}-none`, label: `${pick(o.name).replace(/\s*\((демо|demo)\)/, "")} · ${t("баггүй", "no unit")}`, value: openReports.filter((r) => r.organizationId === o.id && !r.unitId).length },
+      ...o.units.map((u) => ({ key: u.id, label: pick(u.name), value: openFor(o.id, u.id) })),
+      { key: `${o.id}-none`, label: `${pick(o.name).replace(/\s*\((демо|demo)\)/, "")} · ${t("баггүй", "no unit")}`, value: openFor(o.id, null) },
     ])
     .filter((x) => x.value > 0)
     .sort((a, b) => b.value - a.value);
@@ -218,7 +228,7 @@ export function AdminOverview() {
         <Card title={t("Нас", "Age of open reports")} subtitle={t("Хэр удаан хүлээж байна?", "How long have people been waiting?")}>
           <BarList
             ariaLabel={t("Насаар", "By age")}
-            items={ageBuckets(visible, now).map((b) => ({
+            items={ages.map((b) => ({
               key: b.key,
               label: lang === "mn" ? b.mn : b.en,
               value: b.value,
