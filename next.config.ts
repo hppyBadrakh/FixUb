@@ -18,6 +18,10 @@ const nextConfig: NextConfig = {
   // (every request returns 500), and FixUB gains nothing from them: its pages show live data.
   reactCompiler: true,
   turbopack: {
+    // Keeps the map library out of the server bundle (see src/lib/map-library.ts).
+    resolveAlias: {
+      "@/lib/map-library": { browser: "maplibre-gl" },
+    },
     rules: {
       "*.css": {
         loaders: ["@tailwindcss/turbopack"],

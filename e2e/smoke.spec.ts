@@ -12,6 +12,8 @@ test("a visitor sees the public map page", async ({ page }) => {
   const res = await page.goto("/");
   expect(res?.status()).toBe(200);
   await expect(page.locator("main")).toBeVisible();
+  // The map library is loaded in the browser only (src/lib/map-library.ts): it must still arrive.
+  await expect(page.locator(".maplibregl-map").first()).toBeVisible();
   expect(errors).toEqual([]);
 });
 

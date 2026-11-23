@@ -186,7 +186,8 @@ export function ReportMap({
       if (!map?.loaded()) setPhase((p) => (p === "loading" ? "error" : p));
     }, 15000);
     (async () => {
-      const ml = await import("maplibre-gl");
+      // In the browser this is MapLibre GL; see src/lib/map-library.ts.
+      const ml = (await import("@/lib/map-library")) as unknown as typeof import("maplibre-gl");
       if (cancelled || !container.current) return;
       // Served from /public by scripts/copy-maplibre-worker.mjs; the bundler doesn't emit it.
       ml.setWorkerUrl(new URL("/vendor/maplibre-gl-worker.mjs", window.location.href).href);

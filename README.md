@@ -293,7 +293,7 @@ Pushing to `main` deploys through Cloudflare Workers Builds, using the `npm run 
   merging to `main`: Cloudflare's build has no `.env.local`.
 - Keep `cacheComponents` and `partialPrefetching` off in `next.config.ts`: with them on, every
   page returns 500 on Workers.
-- The Worker is about 2.4 MB compressed; the free plan allows 3 MB. Check
+- The Worker is about 2.45 MB compressed; the free plan allows 3 MB. Check
   `npx wrangler deploy --dry-run` before adding a large library.
 
 Requires Node 22+ and a network connection for the map tiles (OpenFreeMap / OpenStreetMap).
@@ -464,7 +464,7 @@ Backups are Neon's:
 | Limit | Free | Why it matters here |
 | --- | --- | --- |
 | Cloudflare Workers requests | 100,000 a day | An open console tab re-reads its lists every 15 s (about 6 requests): roughly 35,000 requests in a working day **per person**. A visitor's tab re-reads once a minute. Three staff with the console open all day use the whole allowance. The paid plan ($5 a month) includes 10 million requests a month |
-| Worker size | 3 MB compressed | The Worker is about 2.7 MB. The paid plan allows 10 MB |
+| Worker size | 3 MB compressed | The Worker is about 2.45 MB (check with `npx wrangler deploy --dry-run` after a build). The paid plan allows 10 MB |
 | Worker CPU time | 10 ms per request | Large lists (the admin's, with every report) are the first to hit it. The paid plan allows 30 s |
 | Neon compute and storage | 0.5 GB, compute sleeps when idle | Photos in Postgres (`photo_blobs`) fill it quickly: move them to R2. The first request after a sleep is slow |
 | R2 | 10 GB, then paid | Needs to be enabled on the account once (it asks for a payment method) |
