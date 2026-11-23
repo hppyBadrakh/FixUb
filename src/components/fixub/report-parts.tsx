@@ -4,13 +4,13 @@ import { forwardRef } from "react";
 import { ArrowRight, CircleCheck, CircleX, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
-import { tally } from "@/lib/domain/actions";
+import { tally } from "@/lib/domain/rules";
 import { placeOf, reportTitle } from "@/lib/domain/metrics";
 import { formatDateTime, formatDistance, timeAgo } from "@/lib/format";
 import { useT } from "@/lib/i18n";
 import { CLOSURE_LABEL, DISTRICT_META, LIMITS, STATUS_META } from "@/lib/meta";
 import { useStore } from "@/lib/store";
-import type { DemoState, Report, StatusTimelineEvent, TimelineEvent } from "@/lib/types";
+import type { AppState, Report, StatusTimelineEvent, TimelineEvent } from "@/lib/types";
 import { NoPhoto, Photo } from "./photo";
 import { CategoryTag, PriorityBadge, StatusBadge } from "./status";
 
@@ -80,7 +80,7 @@ export const ReportCard = forwardRef<
 
 /* ---------- StatusTimeline ---------- */
 
-function eventTitle(e: TimelineEvent, state: DemoState, t: (mn: string, en: string) => string, pick: (b: { mn: string; en: string }) => string) {
+function eventTitle(e: TimelineEvent, state: AppState, t: (mn: string, en: string) => string, pick: (b: { mn: string; en: string }) => string) {
   if (e.type === "assigned") {
     const org = state.organizations.find((o) => o.id === e.organizationId);
     const unit = org?.units.find((u) => u.id === e.unitId);
@@ -109,7 +109,7 @@ export function StatusTimeline({
   next,
 }: {
   report: Report;
-  state: DemoState;
+  state: AppState;
   next?: { title: string; detail?: string };
 }) {
   const { lang, t, pick } = useT();

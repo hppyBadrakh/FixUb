@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, CameraOff, RefreshCw, SwitchCamera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
-import { processImage } from "@/lib/data/photoStore";
+import { processImage } from "@/lib/image";
 import { useT } from "@/lib/i18n";
 
 type Phase = "starting" | "live" | "denied" | "no_camera" | "unsupported" | "error";

@@ -18,9 +18,9 @@ import { formatDateTime, timeAgo } from "@/lib/format";
 import { useT } from "@/lib/i18n";
 import { DISTRICT_META, FLAG_REASON_LABEL, OPEN_STATUSES, PRIORITY_META } from "@/lib/meta";
 import { useNow, useStore } from "@/lib/store";
-import type { DemoState, FlagReason, Report } from "@/lib/types";
+import type { AppState, FlagReason, Report } from "@/lib/types";
 
-export function nextStep(r: Report, state: DemoState, t: (mn: string, en: string) => string, pick: (b: { mn: string; en: string }) => string) {
+export function nextStep(r: Report, state: AppState, t: (mn: string, en: string) => string, pick: (b: { mn: string; en: string }) => string) {
   const org = state.organizations.find((o) => o.id === r.organizationId);
   switch (r.status) {
     case "reported":

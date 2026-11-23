@@ -3,7 +3,12 @@ import { afterAll, describe, expect, it } from "vitest";
 import { GET as adminReports } from "@/app/api/v1/admin/reports/route";
 import { GET as listReports } from "@/app/api/v1/reports/route";
 import { GET as staffReports } from "@/app/api/v1/staff/reports/route";
+import { eq } from "drizzle-orm";
+import { users } from "@/db/schema";
+import { CONSENT_VERSION } from "@/lib/meta";
 import type { Report, StatusTimelineEvent } from "@/lib/types";
+import { acceptTerms } from "@/server/actions/account";
+import { withDb } from "@/server/db";
 import type { ActionResult } from "@/server/action";
 import { moderateReport, undoModeration } from "@/server/actions/moderation";
 import { assignReport, changeStatus, setPriority } from "@/server/actions/reports-admin";
@@ -65,6 +70,18 @@ describe.skipIf(!hasDatabase)("creating a report", () => {
     expect((await find("citizen", listReports, id))!.reporterId).toBe(PERSONAS.citizen);
     expect(await find("citizen", listReports, id, "?mine=1")).toBeDefined();
     expect(await find("otherCitizen", listReports, id, "?mine=1")).toBeUndefined();
+  });
+
+  it("asks for the notice to be accepted once, before a first report", async () => {
+    await withDb((db) => db.update(users).set({ consentedAt: null, consentVersion: null }).where(eq(users.id, PERSONAS.otherCitizen)));
+    try {
+      expect((await create("otherCitizen")).result).toMatchObject({ ok: false, error: "consent_required" });
+      expect(await as("otherCitizen", () => acceptTerms({ version: "an-old-text" }))).toMatchObject({ ok: false, error: "invalid_input" });
+      expect(await as("otherCitizen", () => acceptTerms({ version: CONSENT_VERSION }))).toMatchObject({ ok: true });
+      ok((await create("otherCitizen")).result);
+    } finally {
+      await withDb((db) => db.update(users).set({ consentedAt: new Date(), consentVersion: CONSENT_VERSION }).where(eq(users.id, PERSONAS.otherCitizen)));
+    }
   });
 
   it("refuses a point outside the service area and a description that is too short", async () => {

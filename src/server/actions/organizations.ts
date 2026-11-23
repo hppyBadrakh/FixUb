@@ -1,8 +1,7 @@
 "use server";
 
 // Admin only: create or change an organization, its repair units and the categories it is the
-// suggested owner of. Replaces the demo's `upsertOrganization` in src/lib/domain/actions.ts and
-// takes the same `Organization` object the screen already edits.
+// suggested owner of. Takes the `Organization` object the organizations page edits.
 import { and, eq, inArray, notInArray } from "drizzle-orm";
 import * as z from "zod";
 import { auditEvents, categories, organizations, organizationUnits } from "@/db/schema";

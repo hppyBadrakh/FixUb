@@ -1,7 +1,6 @@
 "use server";
 
 // Admin moderation: hide a report, restore it, or dismiss its flags; and Undo for each.
-// Replaces the demo's `moderate` and `restoreSnapshot` in src/lib/domain/actions.ts.
 import { and, eq, inArray } from "drizzle-orm";
 import * as z from "zod";
 import { auditEvents, moderationFlags, reports } from "@/db/schema";

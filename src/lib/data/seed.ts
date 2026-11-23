@@ -1,6 +1,6 @@
 // Demo data. Organizations are fictional ("demo") and are not integrated with any government body.
 import { DEFAULT_CATEGORIES, ROLE_LABEL } from "../meta";
-import { makeRef, uid } from "../domain/actions";
+import { makeRef, uid } from "../domain/rules";
 import type {
   ActivityEvent,
   Bi,

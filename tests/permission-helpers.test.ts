@@ -16,6 +16,7 @@ function actor(role: Actor["role"], memberships: Membership[] = []): Actor {
     email: `${role}@example.test`,
     role,
     platformRole: role === "admin" ? "admin" : "citizen",
+    consented: true,
     organizationId: role === "admin" ? undefined : memberships[0]?.organizationId,
     memberships,
   };

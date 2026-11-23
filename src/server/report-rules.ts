@@ -32,7 +32,7 @@ export async function lockReport(tx: Tx, id: string) {
 }
 
 /**
- * The form's idempotency key as a UUID (the column's type). The demo form sends a short random
+ * The form's idempotency key as a UUID (the column's type). The form sends a short random
  * string, so anything that isn't a UUID already is hashed into one: the same key always gives
  * the same UUID, which is all a double submit needs.
  */

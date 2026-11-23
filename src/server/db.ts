@@ -27,8 +27,3 @@ export async function withDb<T>(fn: (db: Db) => Promise<T>): Promise<T> {
     await close().catch((err: unknown) => console.error("[db] close failed:", err));
   }
 }
-
-/** Whether this deployment has a database at all. Without one the app is the browser-only demo. */
-export function hasDatabase(): boolean {
-  return !!serverEnv().databaseUrl;
-}

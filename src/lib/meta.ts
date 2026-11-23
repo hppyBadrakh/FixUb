@@ -115,8 +115,8 @@ export const ICONS: Record<IconKey, LucideIcon> = {
 const sub = (id: string, mn: string, en: string): SubcategoryDef => ({ id, name: { mn, en } });
 
 /**
- * Initial category tree. It lives in demo state, so admins can rename, add, remove and reorder
- * categories and subcategories at /admin/categories.
+ * The category tree the seed starts from. In the database admins can rename, add, remove and
+ * reorder categories and subcategories at /admin/categories.
  */
 export const DEFAULT_CATEGORIES: CategoryDef[] = [
   {
@@ -264,6 +264,12 @@ export const ROLE_LABEL: Record<"citizen" | "admin" | "org_staff" | "org_manager
 /** Ulaanbaatar service area (approximate bounding box). */
 export const SERVICE_AREA = { west: 106.6, south: 47.8, east: 107.25, north: 48.05 };
 export const UB_CENTER: LngLat = { lng: 106.917, lat: 47.918 };
+
+/**
+ * The version of the notice a person accepts before their first report (what becomes public).
+ * Change it when the text in the report form changes: everyone is then asked again.
+ */
+export const CONSENT_VERSION = "2026-11";
 
 export const LIMITS = {
   descriptionMin: 10,

@@ -10,9 +10,9 @@
 // - Pass `null` as the path to skip the request (e.g. until the user is known).
 //
 // Lists and dashboards that other people change (the map, the queues, a report's timeline) use
-// `useLiveApi` instead: the same hook, re-read every 15 s. This replaces the demo's cross-tab
-// sync, and works across devices. `useFreshIds` gives the rows that just changed, for the
-// `fx-fresh` highlight the demo got from `useStore().freshIds`:
+// `useLiveApi` instead: the same hook, re-read every 15 s, so a change made on
+// one device shows up on every other. `useFreshIds` gives the rows that just changed, for the
+// `fx-fresh` highlight (the store does the same for its own lists, as `useStore().freshIds`):
 //
 //   const { data } = useLiveApi<ReviewQueueResponse>("/api/v1/admin/reports");
 //   const fresh = useFreshIds(data?.reports, "updatedAt");

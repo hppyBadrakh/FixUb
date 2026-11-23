@@ -24,7 +24,7 @@ import type { Catalog } from "@/lib/catalog";
 import { priorityRank } from "@/lib/domain/metrics";
 import { DISTRICT_META, LIMITS, PRIORITY_META, STATUS_META } from "@/lib/meta";
 import { useStore } from "@/lib/store";
-import type { ActivityEvent, DemoState, Report } from "@/lib/types";
+import type { ActivityEvent, AppState, Report } from "@/lib/types";
 import { CategoryTag, PriorityBadge, StatusBadge } from "./status";
 
 /* ---------- KpiCard ---------- */
@@ -109,7 +109,7 @@ const eventIcon: Record<ActivityEvent["type"], LucideIcon> = {
   prioritized: Gauge,
 };
 
-export function activityText(ev: ActivityEvent, state: DemoState, t: (mn: string, en: string) => string, pick: (b: { mn: string; en: string }) => string) {
+export function activityText(ev: ActivityEvent, state: AppState, t: (mn: string, en: string) => string, pick: (b: { mn: string; en: string }) => string) {
   const report = state.reports.find((r) => r.id === ev.reportId);
   const cat = state.categories.find((c) => c.id === report?.category);
   const what = cat?.subcategories.find((x) => x.id === report?.subcategory)?.name ?? cat?.name ?? { mn: "", en: "" };
@@ -150,7 +150,7 @@ export function ActivityFeed({
 }: {
   now: number;
   events: ActivityEvent[];
-  state: DemoState;
+  state: AppState;
   hrefFor: (reportId: string) => string;
   maxHeight?: number;
   fresh?: ReadonlySet<string>;
@@ -415,7 +415,7 @@ export function ReportTable({
   showAssignee = true,
 }: {
   rows: Report[];
-  state: DemoState;
+  state: AppState;
   now: number;
   sort: { key: SortKey; dir: "asc" | "desc" };
   onSort: (key: SortKey) => void;

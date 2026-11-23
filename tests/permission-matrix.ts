@@ -6,12 +6,14 @@ import type { Role } from "@/lib/types";
 import type { ErrorCode } from "@/server/errors";
 import { eq } from "drizzle-orm";
 import { moderationFlags, reports } from "@/db/schema";
+import { CONSENT_VERSION } from "@/lib/meta";
 import { withDb } from "@/server/db";
 import { listCategories } from "@/server/queries/categories";
 import { listOrganizations } from "@/server/queries/organizations";
 import { PERSONAS, type Persona } from "./helpers/personas";
 import { jpeg, publicPhoto, rememberPhoto, uploadedBy } from "./helpers/photos";
 import { makeReport, newReportInput, rememberReport, type FixtureOptions } from "./helpers/reports";
+import { makeUser } from "./helpers/users";
 
 type Lazy<T> = () => T | Promise<T>;
 /** Built for the persona who is about to call (a photo, for example, must be their own upload). */
@@ -81,6 +83,8 @@ const ROAD = { org: "org-road" } as const;
 export const ACTIONS: Record<string, ActionRule> = {
   "categories/saveCategories": { allowed: ["admin"], input: currentCategoryTree },
 
+  "account/acceptTerms": { allowed: ANY_ROLE, input: () => ({ version: CONSENT_VERSION }) },
+
   /* ---- citizen side: any signed-in user ---- */
   "reports-citizen/createReport": {
     allowed: ANY_ROLE,
@@ -149,6 +153,26 @@ export const ACTIONS: Record<string, ActionRule> = {
   },
   "moderation/moderateReport": { allowed: ["admin"], input: onReport({}, { action: "hide" }) },
   "moderation/undoModeration": { allowed: ["admin"], input: onReport({ hidden: true }, { visibility: "visible", flagIds: [] }) },
+  // Accounts made by makeUser(), never the personas: these calls really change them.
+  "users/setUserAccess": {
+    allowed: ["admin"],
+    input: async () => ({ userId: await makeUser(), access: { kind: "staff", organizationId: "org-road", role: "org_staff", unitId: "unit-road-a" } }),
+    refusals: [
+      { name: "your own account", as: "admin", input: () => ({ userId: PERSONAS.admin, access: { kind: "citizen" } }), error: "forbidden" },
+      { name: "an account that doesn't exist", as: "admin", input: () => ({ userId: "nobody", access: { kind: "admin" } }), error: "not_found" },
+      {
+        name: "a unit of another organization",
+        as: "admin",
+        input: async () => ({ userId: await makeUser(), access: { kind: "staff", organizationId: "org-road", role: "org_staff", unitId: "unit-light-1" } }),
+        error: "invalid_input",
+      },
+    ],
+  },
+  "users/setUserBanned": {
+    allowed: ["admin"],
+    input: async () => ({ userId: await makeUser(), banned: true }),
+    refusals: [{ name: "your own account", as: "admin", input: () => ({ userId: PERSONAS.admin, banned: true }), error: "forbidden" }],
+  },
   "organizations/saveOrganization": {
     allowed: ["admin"],
     // The road organization exactly as it is: saving it again changes nothing.
@@ -190,6 +214,7 @@ export const ROUTES: Record<string, RouteRule> = {
     refusals: [{ name: "a period the overview doesn't offer", as: "admin", url: () => "/api/v1/admin/dashboard?days=5", status: 400 }],
   },
   "admin/users": { allowed: ["admin"] },
+  "admin/accounts": { allowed: ["admin"] },
   "staff/dashboard": { allowed: ["org_staff", "org_manager"] },
   "staff/reports": { allowed: ["org_staff", "org_manager"] },
   "staff/activity": { allowed: ["org_staff", "org_manager"] },

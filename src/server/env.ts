@@ -16,8 +16,13 @@ export function serverEnv() {
     authSecret: value(e.BETTER_AUTH_SECRET),
     authUrl: value(e.BETTER_AUTH_URL)?.replace(/\/+$/, ""),
     google: googleClientId && googleClientSecret ? { clientId: googleClientId, clientSecret: googleClientSecret } : null,
-    /** The demo role picker. Only the exact string "true" enables it. */
+    /** A demonstration deployment: sample users on the login page. Only the exact string "true" enables it. */
     demoLogin: e.DEMO_LOGIN === "true",
+    /** Emails that are always admins (ADMIN_EMAILS, comma-separated), lower case. */
+    adminEmails: (e.ADMIN_EMAILS ?? "")
+      .split(",")
+      .map((x) => x.trim().toLowerCase())
+      .filter(Boolean),
   };
 }
 

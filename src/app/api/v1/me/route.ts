@@ -1,6 +1,7 @@
 // GET /api/v1/me: what this server offers, and who is signed in.
-// The client store calls it on load. `configured: false` means there is no database, and the
-// app runs as the browser-only demo.
+// The client store calls it on load. `configured: false` means there is no database or no
+// sign-in secret: the app then shows a "not configured" page instead of itself.
+import { DEMO_USERS } from "@/lib/data/seed";
 import { getActor, type Actor } from "@/server/actor";
 import { api } from "@/server/api";
 import { withDb } from "@/server/db";
@@ -19,6 +20,7 @@ function toSessionUser(actor: Actor | null): SessionUser | null {
     unitId: actor.unitId ?? null,
     organizationSlug: membership?.organizationSlug ?? null,
     unitSlug: membership?.unitSlug ?? null,
+    consented: actor.consented,
   };
 }
 
@@ -29,6 +31,6 @@ export async function GET() {
       return { configured: false, google: false, demoLogin: false, user: null };
     }
     const user = await withDb(async (db) => toSessionUser(await getActor(db)));
-    return { configured: true, google: !!env.google, demoLogin: env.demoLogin, user };
+    return { configured: true, google: !!env.google, demoLogin: env.demoLogin, ...(env.demoLogin ? { sampleUsers: DEMO_USERS } : {}), user };
   });
 }

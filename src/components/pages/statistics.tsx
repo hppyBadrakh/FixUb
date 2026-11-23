@@ -16,15 +16,15 @@ import { DISTRICT_META, DISTRICT_ORDER, STATUS_META, STATUS_ORDER } from "@/lib/
 import { useNow, useStore } from "@/lib/store";
 
 export function Statistics() {
-  const { ready, state, server, catalog } = useStore();
+  const { ready, state, catalog } = useStore();
   const { lang, t, pick } = useT();
   const now = useNow(60_000);
   const [period, setPeriod] = useState<"7" | "30" | "90">("30");
   const visible = useMemo(() => state.reports.filter((r) => r.visibility === "visible"), [state.reports]);
   const days = Number(period);
-  // With a server the numbers are counted in SQL (re-read every minute). Until they arrive, and
-  // in the browser-only demo, the same definitions run here on the loaded reports.
-  const fromServer = useApi<StatisticsResponse>(server.configured ? `/api/v1/statistics?days=${days}` : null, { refreshInterval: 60_000, keepPreviousData: true }).data;
+  // The numbers are counted in SQL (re-read every minute). Until they arrive, the same
+  // definitions run here on the loaded reports.
+  const fromServer = useApi<StatisticsResponse>(`/api/v1/statistics?days=${days}`, { refreshInterval: 60_000, keepPreviousData: true }).data;
   const stats = fromServer?.days === days ? fromServer : undefined;
   const s = useMemo(() => stats?.summary ?? summarize(visible, now, days), [stats, visible, now, days]);
   const series = useMemo(() => stats?.series ?? dailySeries(visible, now, 14), [stats, visible, now]);
@@ -159,9 +159,7 @@ export function Statistics() {
         </Card>
       </div>
       <p className="mt-6 text-caption text-ink-subtle">
-        {server.configured
-          ? t(`Тоонуудыг өгөгдлийн сангаас тооцсон (${periodLabel}). Нуусан мэдээллийг оруулаагүй.`, `Figures are counted in the database (${periodLabel}). Hidden reports are excluded.`)
-          : t(`Тоонууд ${periodLabel}-ийн демо өгөгдөл дээр тооцоологдсон. Нуусан мэдээллийг оруулаагүй.`, `Figures are calculated from demo data (${periodLabel}). Hidden reports are excluded.`)}
+        {t(`Тоонуудыг өгөгдлийн сангаас тооцсон (${periodLabel}). Нуусан мэдээллийг оруулаагүй.`, `Figures are counted in the database (${periodLabel}). Hidden reports are excluded.`)}
       </p>
     </div>
   );

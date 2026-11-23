@@ -1,5 +1,5 @@
 // Small offline gazetteer of well-known Ulaanbaatar places for the location search.
-// (No geocoding API is used in the demo.) Coordinates are approximate.
+// (No geocoding API is used yet.) Coordinates are approximate.
 import type { Bi, LngLat } from "./types";
 
 export const PLACES: (Bi & LngLat)[] = [

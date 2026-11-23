@@ -20,8 +20,8 @@ import {
   Sun,
   User as UserIcon,
   Inbox,
-  RotateCcw,
   Tags,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import { Button, ButtonLink, IconButton } from "@/components/ui/button";
@@ -201,7 +201,7 @@ export function AppHeader() {
             </>
           ) : (
             <ButtonLink href="/login" icon={LogIn} fullWidth onClick={() => setMenu(false)}>
-              {t("Нэвтрэх (демо)", "Sign in (demo)")}
+              {t("Нэвтрэх", "Sign in")}
             </ButtonLink>
           )}
         </div>
@@ -264,7 +264,7 @@ export function MobileTabBar() {
 export function ConsoleShell({ area, children }: { area: "admin" | "staff"; children: React.ReactNode }) {
   const pathname = usePathname();
   const { t, pick } = useT();
-  const { ready, user, state, signOut, reset } = useStore();
+  const { ready, user, state, signOut } = useStore();
   const router = useRouter();
   const [menu, setMenu] = useState(false);
 
@@ -285,6 +285,7 @@ export function ConsoleShell({ area, children }: { area: "admin" | "staff"; chil
           },
           { href: "/admin/organizations", mn: "Байгууллагууд", en: "Organizations", icon: Building2 },
           { href: "/admin/categories", mn: "Ангилал", en: "Categories", icon: Tags },
+          { href: "/admin/users", mn: "Хэрэглэгчид", en: "Users", icon: Users },
           {
             href: "/admin/moderation",
             mn: "Хяналт",
@@ -362,19 +363,6 @@ export function ConsoleShell({ area, children }: { area: "admin" | "staff"; chil
           {t("Гарах", "Sign out")}
         </Button>
       </div>
-      {area === "admin" && (
-        <Button
-          size="sm"
-          variant="quiet"
-          icon={RotateCcw}
-          className="text-ink-muted"
-          onClick={async () => {
-            if (window.confirm(t("Демо өгөгдлийг анхны байдалд нь оруулах уу? Таны нэмсэн мэдээлэл устна.", "Reset the demo data? Reports you added will be removed."))) await reset();
-          }}
-        >
-          {t("Демог шинэчлэх", "Reset demo data")}
-        </Button>
-      )}
     </div>
   );
 
@@ -421,12 +409,12 @@ export function ConsoleShell({ area, children }: { area: "admin" | "staff"; chil
             </p>
             <p className="mt-2 text-body text-ink-muted">
               {t(
-                "Энэ хэсэг зөвхөн эрх бүхий хэрэглэгчдэд зориулагдсан. Демо дүрээ сонгоно уу.",
-                "This area is only for authorized users. Choose a demo role to continue.",
+                "Энэ хэсэг зөвхөн эрх бүхий хэрэглэгчдэд зориулагдсан.",
+                "This area is only for authorized users.",
               )}
             </p>
             <ButtonLink href={`/login?next=${encodeURIComponent(pathname)}`} variant="primary" icon={LogIn} className="mt-6">
-              {t("Демо дүр сонгох", "Choose a demo role")}
+              {t("Нэвтрэх", "Sign in")}
             </ButtonLink>
           </div>
         )}

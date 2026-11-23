@@ -22,7 +22,7 @@ export function inServiceArea(p: LngLat): boolean {
 }
 
 /**
- * Approximate district from the nearest district centre. Good enough for a demo;
+ * Approximate district from the nearest district centre. A first approximation;
  * the real system would use district polygons in PostGIS.
  */
 export function guessDistrict(p: LngLat): DistrictId {

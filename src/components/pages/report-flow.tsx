@@ -13,7 +13,7 @@ import { DuplicateHint, Stepper } from "@/components/fixub/report-parts";
 import { ReportMap, type PickValue } from "@/components/fixub/report-map";
 import { PriorityBadge, StatusBadge } from "@/components/fixub/status";
 import { cn } from "@/lib/cn";
-import { findDuplicateCandidates, uid } from "@/lib/domain/actions";
+import { findDuplicateCandidates, uid } from "@/lib/domain/rules";
 import { guessDistrict, inServiceArea } from "@/lib/domain/geo";
 import { useT } from "@/lib/i18n";
 import { DISTRICT_META, DISTRICT_ORDER, ICONS, LIMITS, STATUS_META } from "@/lib/meta";
@@ -54,7 +54,7 @@ function emptyDraft(requestId = uid("req")): Draft {
 }
 
 export function ReportFlow() {
-  const { ready, state, user, act, catalog } = useStore();
+  const { ready, state, user, consented, act, catalog } = useStore();
   const { lang, t, pick: pickBi } = useT();
   const router = useRouter();
   const toast = useToast();
@@ -67,6 +67,7 @@ export function ReportFlow() {
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [confirmedDup, setConfirmedDup] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [accepting, setAccepting] = useState(false);
   const [done, setDone] = useState<Pick<Report, "id" | "ref"> | null>(null);
   const [placeQuery, setPlaceQuery] = useState("");
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -120,7 +121,7 @@ export function ReportFlow() {
             )}
           </p>
           <ButtonLink href="/login?next=/reports/new" variant="primary" size="lg" icon={LogIn} className="mt-6">
-            {t("Демо иргэнээр нэвтрэх", "Sign in as a demo citizen")}
+            {t("Нэвтрэх", "Sign in")}
           </ButtonLink>
         </div>
       </FlowFrame>
@@ -170,6 +171,39 @@ export function ReportFlow() {
               {t("Өөр асуудал мэдээлэх", "Report another")}
             </Button>
           </div>
+        </div>
+      </FlowFrame>
+    );
+  }
+
+  /* ---------- Once, before the first report: what becomes public ---------- */
+  if (!consented) {
+    return (
+      <FlowFrame title={t("Асуудал мэдээлэх", "Report a problem")} onClose={() => router.push("/")}>
+        <div className="mx-auto max-w-[480px] px-4 py-10">
+          <h1 className="text-title-2 font-[600]">{t("Эхлэхээс өмнө", "Before you start")}</h1>
+          <ul className="mt-4 list-disc space-y-2 pl-5 text-body text-ink-muted">
+            <li>{t("Таны мэдээлэл илгээмэгц нийтэд нээлттэй болно: зураг, байршил, ангилал, тайлбар.", "Your report is public as soon as you send it: its photos, location, category and description.")}</li>
+            <li>{t("Таны нэр, имэйл хэзээ ч нийтэд харагдахгүй. Тэдгээрийг зөвхөн нэвтрэлтэд ашиглана.", "Your name and email are never shown publicly. They are only used to sign you in.")}</li>
+            <li>{t("Хүний нүүр, машины дугаарыг зурагт оруулахгүй байхыг хичээнэ үү.", "Try to keep people's faces and number plates out of the photo.")}</li>
+            <li>{t("Зохисгүй мэдээллийг хянагч нууж, давтан зөрчвөл бүртгэлийг хааж болно.", "Moderators may hide a report that breaks the rules, and block an account that keeps doing so.")}</li>
+            <li>{t("FixUB яаралтай тусламжийн үйлчилгээ биш. Аюултай үед 102, 103, 105 руу залгана уу.", "FixUB is not an emergency service. In danger, call 102, 103 or 105.")}</li>
+          </ul>
+          <Button
+            variant="primary"
+            size="lg"
+            fullWidth
+            className="mt-6"
+            loading={accepting}
+            onClick={async () => {
+              setAccepting(true);
+              const res = await act.acceptTerms();
+              setAccepting(false);
+              if (!res.ok) toast({ tone: "danger", title: t("Хадгалж чадсангүй", "Couldn't save"), body: t("Дахин оролдоно уу.", "Try again.") });
+            }}
+          >
+            {t("Ойлголоо, үргэлжлүүлье", "I understand, continue")}
+          </Button>
         </div>
       </FlowFrame>
     );

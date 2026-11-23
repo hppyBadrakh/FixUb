@@ -10,7 +10,7 @@ import { OPEN_STATUSES } from "@/lib/meta";
 import { whereVisible } from "./reports";
 
 // The overview's numbers (GET /api/v1/admin/dashboard and /staff/dashboard), counted in SQL.
-// Every number follows src/lib/domain/metrics.ts, which the demo computes in the browser:
+// Every number follows src/lib/domain/metrics.ts, which the screens also run in the browser:
 // tests/dashboard.db.test.ts checks that both give the same answer on the same reports.
 //
 // - Only visible reports count, like the screens' `visible` list. `scope` narrows them further

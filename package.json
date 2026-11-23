@@ -21,6 +21,7 @@
     "db:migrate": "tsx scripts/db/migrate.ts",
     "db:seed": "tsx scripts/db/seed.ts",
     "db:reset": "tsx scripts/db/reset.ts",
+    "db:go-live": "tsx scripts/db/go-live.ts",
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down"
   },

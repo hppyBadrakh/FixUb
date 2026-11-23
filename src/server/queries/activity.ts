@@ -7,7 +7,7 @@ import type { ActivityEvent, Bi, Priority } from "@/lib/types";
 import { FIXUB_TEAM, SYSTEM } from "./reports";
 
 // The activity feed (GET /api/v1/admin/activity and /staff/activity), read from the tables where
-// things are recorded, in the demo's `ActivityEvent` shape:
+// things are recorded, in the `ActivityEvent` shape:
 //
 //   report_status_events   "created" (the first event) and "status"
 //   audit_events           "assigned", "prioritized", "hidden" (by an admin or automatically
@@ -16,7 +16,7 @@ import { FIXUB_TEAM, SYSTEM } from "./reports";
 //   moderation_flags       "flagged": admins only, like the flags themselves
 //
 // Nobody is identified: no user ids, and actors are labelled like on the public timeline
-// ("Road Maintenance", "FixUB team", "System"). "Disputed" (the demo's verdict swing) is not
+// ("Road Maintenance", "FixUB team", "System"). "Disputed" (a verdict swing) is not
 // recorded anywhere yet, so it doesn't appear.
 
 /** The audit actions that are events on a report. */
@@ -99,7 +99,7 @@ export async function loadActivity(db: Db | Tx, { scope, limit, withFlags = fals
         return [{ ...event, type: "prioritized", priority: meta.priority }];
       case "report.hide":
         return [{ ...event, type: "hidden", actorLabel: meta.automatic ? SYSTEM : FIXUB_TEAM }];
-      // Like the demo: dismissing the flags keeps the report shown, so it reads as "restored".
+      // Dismissing the flags keeps the report shown, so it reads as "restored".
       case "report.restore":
       case "report.dismiss":
         return [{ ...event, type: "restored" }];
@@ -112,7 +112,7 @@ export async function loadActivity(db: Db | Tx, { scope, limit, withFlags = fals
 
   const events: ActivityEvent[] = [
     // Audit first: when the third flag hides a report, both happen at the same moment, and the
-    // stable sort below then shows "hidden" above "flagged", as the demo did.
+    // stable sort below then shows "hidden" above "flagged", which reads better.
     ...auditRows.flatMap(fromAudit),
     ...flagRows.map((f): ActivityEvent => ({ id: `f${f.id}`, at: f.at.getTime(), reportId: f.reportId, type: "flagged" })),
     // A confirmation's key is (report, user): its id must not carry the user, so it is numbered.

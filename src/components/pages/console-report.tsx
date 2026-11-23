@@ -13,7 +13,7 @@ import { NoPhoto, Photo } from "@/components/fixub/photo";
 import { MetaRow, StatusTimeline } from "@/components/fixub/report-parts";
 import { ReportMap } from "@/components/fixub/report-map";
 import { CategoryTag, PriorityBadge, StatusBadge } from "@/components/fixub/status";
-import { suggestedOrganization, tally } from "@/lib/domain/actions";
+import { suggestedOrganization, tally } from "@/lib/domain/rules";
 import { distanceM } from "@/lib/domain/geo";
 import { canWorkOn, transitionOptions } from "@/lib/domain/lifecycle";
 import { descriptionOf, placeOf, reportTitle } from "@/lib/domain/metrics";

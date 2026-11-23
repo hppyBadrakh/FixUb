@@ -14,7 +14,7 @@ const golos = Golos_Text({
 export const metadata: Metadata = {
   title: { default: "FixUB — Хотын асуудлыг хамтдаа шийдье", template: "%s · FixUB" },
   description:
-    "Улаанбаатарын дэд бүтцийн асуудлыг мэдээлж, явцыг нь олон нийтэд хянах платформ (демо). Report and track public infrastructure problems in Ulaanbaatar.",
+    "Улаанбаатарын дэд бүтцийн асуудлыг мэдээлж, явцыг нь олон нийтэд хянах платформ. Report and track public infrastructure problems in Ulaanbaatar.",
 };
 
 export const viewport: Viewport = {

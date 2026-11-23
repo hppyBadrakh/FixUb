@@ -1,10 +1,10 @@
 // One error type for the whole server. Throw an AppError anywhere below a route handler or a
 // server action; `api()` (src/server/api.ts) turns it into an HTTP response and `action()`
-// (src/server/action.ts) into `{ ok: false, error }`, which is the shape the demo screens already handle.
-import type { ActionError } from "@/lib/domain/actions";
+// (src/server/action.ts) into `{ ok: false, error }`, which the screens show a text for.
+import type { ActionError } from "@/lib/domain/rules";
 
-/** The demo's error codes, plus the ones only a real server can produce. */
-export type ErrorCode = ActionError | "not_configured" | "rate_limited" | "internal";
+/** The rule violations (src/lib/domain/rules.ts), plus the errors only a server can produce. */
+export type ErrorCode = ActionError | "consent_required" | "not_configured" | "rate_limited" | "internal";
 
 const STATUS: Record<ErrorCode, number> = {
   signed_out: 401,
@@ -13,6 +13,8 @@ const STATUS: Record<ErrorCode, number> = {
   not_found: 404,
   conflict: 409,
   rate_limited: 429,
+  // Signed in, but hasn't accepted the notice shown before a first report.
+  consent_required: 403,
   not_configured: 503,
   internal: 500,
   invalid_input: 400,
@@ -38,6 +40,7 @@ const DEFAULT_MESSAGE: Partial<Record<ErrorCode, string>> = {
   not_found: "Not found.",
   conflict: "Someone else changed this at the same time. Reload and try again.",
   rate_limited: "Too many requests. Try again later.",
+  consent_required: "Accept the notice about what becomes public before reporting.",
   not_configured: "The server is not configured for this.",
   internal: "Something went wrong on the server.",
   invalid_input: "The request is not valid.",
