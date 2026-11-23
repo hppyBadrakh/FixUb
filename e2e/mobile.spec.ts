@@ -3,7 +3,7 @@
 import { expect, test } from "@playwright/test";
 import { signInAs } from "./helpers";
 
-const PAGES = ["/", "/?view=list", "/statistics", "/login", "/my-reports", "/reports/new"];
+const PAGES = ["/", "/?view=list", "/statistics", "/login", "/my-reports", "/reports/new", "/privacy", "/terms"];
 
 for (const lang of ["mn", "en"] as const) {
   test(`citizen screens fit a 360 px phone (${lang})`, async ({ browser }) => {

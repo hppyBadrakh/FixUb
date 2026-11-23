@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { CircleCheck, Clock, Inbox, TriangleAlert } from "lucide-react";
 import { PageSkeleton, SampleDataPill } from "@/components/ui/feedback";
+import { LegalLinks } from "@/components/pages/legal";
 import { SegmentedControl } from "@/components/ui/form";
 import { Card } from "@/components/ui/overlay";
 import { BarList, KpiCard, TrendChart } from "@/components/fixub/data";
@@ -161,6 +162,7 @@ export function Statistics() {
       <p className="mt-6 text-caption text-ink-subtle">
         {t(`Тоонуудыг өгөгдлийн сангаас тооцсон (${periodLabel}). Нуусан мэдээллийг оруулаагүй.`, `Figures are counted in the database (${periodLabel}). Hidden reports are excluded.`)}
       </p>
+      <LegalLinks className="mt-2 text-caption text-ink-subtle" />
     </div>
   );
 }

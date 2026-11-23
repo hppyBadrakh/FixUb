@@ -2,12 +2,15 @@
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { GET as accountsRoute } from "@/app/api/v1/admin/accounts/route";
-import { organizationMembers, organizations, sessions, users } from "@/db/schema";
+import { organizationMembers, organizations, reportConfirmations, reportImages, reports, sessions, users } from "@/db/schema";
 import type { Account, AccountsResponse } from "@/lib/api/types";
-import { setUserAccess, setUserBanned } from "@/server/actions/users";
+import { deleteUser, setUserAccess, setUserBanned } from "@/server/actions/users";
 import { getActor } from "@/server/actor";
 import { withDb } from "@/server/db";
 import { as, hasDatabase, PERSONAS, signOutEveryone } from "./helpers/personas";
+import { storePhoto } from "@/server/photos";
+import { bucketObjects, cleanUpPhotos, jpeg } from "./helpers/photos";
+import { cleanUpReports, makeReport } from "./helpers/reports";
 import { cleanUpUsers, makeUser } from "./helpers/users";
 
 async function account(id: string): Promise<Account | undefined> {
@@ -69,6 +72,39 @@ describe.skipIf(!hasDatabase)("user management", () => {
     expect(await as("admin", () => setUserBanned({ userId: PERSONAS.admin, banned: true }))).toMatchObject({ ok: false, error: "forbidden" });
     const [me] = await withDb((db) => db.select({ role: users.platformRole, bannedAt: users.bannedAt }).from(users).where(eq(users.id, PERSONAS.admin)));
     expect(me).toEqual({ role: "admin", bannedAt: null });
+  });
+});
+
+describe.skipIf(!hasDatabase)("deleting an account", () => {
+  afterAll(cleanUpUsers);
+  afterAll(cleanUpReports);
+  afterAll(cleanUpPhotos);
+  afterAll(signOutEveryone);
+
+  it("removes the person and everything personal, and keeps their reports as nobody's", async () => {
+    const id = await makeUser("Устгагдах Хүн");
+    // They filed a report, said "me too" on another, and uploaded a photo they never used.
+    const [own, other] = [await makeReport(), await makeReport()];
+    const loose = await withDb(async (db) => {
+      await db.update(reports).set({ reporterId: id }).where(eq(reports.id, own));
+      await db.insert(reportConfirmations).values({ reportId: other, userId: id });
+      await db.update(reports).set({ confirmationCount: 1 }).where(eq(reports.id, other));
+      return storePhoto(db, { id }, jpeg());
+    });
+    expect(bucketObjects.has(`photos/${loose.id}.jpg`)).toBe(true);
+
+    expect(await as("admin", () => deleteUser({ userId: id }))).toMatchObject({ ok: true });
+
+    expect(await account(id)).toBeUndefined();
+    const left = await withDb(async (db) => ({
+      user: (await db.select().from(users).where(eq(users.id, id))).length,
+      sessions: (await db.select().from(sessions).where(eq(sessions.userId, id))).length,
+      own: (await db.select({ reporterId: reports.reporterId }).from(reports).where(eq(reports.id, own)))[0],
+      other: (await db.select({ n: reports.confirmationCount }).from(reports).where(eq(reports.id, other)))[0],
+      photo: (await db.select().from(reportImages).where(eq(reportImages.id, loose.id))).length,
+    }));
+    expect(left).toEqual({ user: 0, sessions: 0, own: { reporterId: null }, other: { n: 0 }, photo: 0 });
+    expect(bucketObjects.has(`photos/${loose.id}.jpg`)).toBe(false);
   });
 });
 
