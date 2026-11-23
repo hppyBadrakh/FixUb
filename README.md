@@ -84,7 +84,7 @@ Cloudflare dashboard. Never commit `.env.local` or `.dev.vars`.
 | `DEMO_LOGIN` | development only | `true` makes this a demonstration deployment: sample users on `/login` and "Sample data" notes. Anything else turns both off, and the server refuses sample sign-ins. **Never `true` on the real site** |
 | `REVIEW_BEFORE_PUBLIC` | optional | `true`: a new report is only public once an admin has reviewed it (set its priority). Until then only its reporter, admins and assigned staff see it. Default: public at once |
 | `NEXT_PUBLIC_MAP_STYLE_URL` | optional, **build time** | A MapLibre style URL for the map. Default: OpenFreeMap's free public server (no service guarantee). Set it in the Cloudflare build's variables, not as a runtime secret |
-| `ADMIN_EMAILS` | on the real site | Comma-separated Google emails that are always admins. This is how the first admin gets in; everyone else is given access on `/admin/users` |
+| `ADMIN_EMAILS` | on the real site | Comma-separated Google emails that are always admins, and the only ones who decide who else is an admin (owners). This is how the first admin gets in; everyone else is given access on `/admin/users` |
 
 ## How the real app is built
 
@@ -184,7 +184,9 @@ Postgres; Google is the only way in. `GET /api/v1/me` returns who is signed in.
   Admins can also block an account, which signs it out everywhere, and delete one when its
   owner asks: the account and everything personal goes, the reports stay public and unlinked.
 - An admin can't change or block their own account, so one admin can't lock everybody out.
-- The first admin comes from `ADMIN_EMAILS` on the server.
+- The first admin comes from `ADMIN_EMAILS` on the server. Those accounts are the **owners**: only
+  an owner can make someone an admin, or change, block or delete an admin. Other admins manage
+  citizens and staff only. A new account is always a citizen.
 - On a demonstration deployment the sample users (`u-citizen`, `u-admin`, `u-road-staff`, …) are
   also offered on `/login`.
 

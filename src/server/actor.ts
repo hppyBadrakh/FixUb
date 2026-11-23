@@ -29,6 +29,11 @@ export interface Membership {
 export interface Actor extends User {
   email: string;
   platformRole: "citizen" | "admin";
+  /**
+   * An owner: an admin through ADMIN_EMAILS. Only an owner decides who is an admin — giving or
+   * taking the admin role, and changing, blocking or deleting another admin.
+   */
+  owner: boolean;
   /** Accepted the current notice about what a report makes public (asked before the first report). */
   consented: boolean;
   memberships: Membership[];
@@ -83,13 +88,15 @@ export async function getActor(db: Db): Promise<Actor | null> {
     .orderBy(asc(organizationMembers.createdAt), asc(organizationMembers.organizationId));
 
   const primary = memberships[0];
-  const platformRole = user.platformRole === "admin" || isBootstrapAdmin(user) ? "admin" : "citizen";
+  const owner = isBootstrapAdmin(user);
+  const platformRole = user.platformRole === "admin" || owner ? "admin" : "citizen";
   const role: Role = platformRole === "admin" ? "admin" : (primary?.role ?? "citizen");
   return {
     id: user.id,
     name: user.name,
     email: user.email,
     platformRole,
+    owner,
     consented: user.consentedAt !== null && user.consentVersion === CONSENT_VERSION,
     role,
     organizationId: role === "admin" ? undefined : primary?.organizationId,

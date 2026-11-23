@@ -16,7 +16,7 @@ import {
   users,
 } from "@/db/schema";
 import { action } from "@/server/action";
-import { getActor, requireRole } from "@/server/actor";
+import { getActor, isBootstrapAdmin, requireRole } from "@/server/actor";
 import { AppError } from "@/server/errors";
 import { deletePhotoObjects } from "@/server/photos";
 import { rateLimit } from "@/server/rate-limit";
@@ -43,11 +43,17 @@ const setBannedSchema = z.object({ userId, banned: z.boolean() });
 const deleteUserSchema = z.object({ userId });
 
 const notYourself = (what: string) => new AppError("forbidden", `You can't ${what} your own account. Ask another admin.`);
+const ownersOnly = () => new AppError("forbidden", "Only an owner (ADMIN_EMAILS) decides who is an admin.");
+
+/** Is this account an admin, in the database or through ADMIN_EMAILS? */
+const isAdminAccount = (u: { platformRole: string; email: string; emailVerified: boolean }) => u.platformRole === "admin" || isBootstrapAdmin(u);
+const adminFields = { id: users.id, platformRole: users.platformRole, email: users.email, emailVerified: users.emailVerified };
 
 /**
  * Sets everything a person may do in one go: a citizen, an admin, or staff of one organization.
  * It replaces what they had before (a user works for at most one organization). Admins can't
- * change their own access, so there is always another admin left to undo a mistake.
+ * change their own access, so there is always another admin left to undo a mistake. Only an
+ * owner (ADMIN_EMAILS) may make someone an admin or change what an admin may do.
  */
 export async function setUserAccess(input: unknown) {
   return action(setAccessSchema, input, async ({ db, input }) => {
@@ -57,8 +63,9 @@ export async function setUserAccess(input: unknown) {
     const { access } = input;
 
     await db.transaction(async (tx) => {
-      const [target] = await tx.select({ id: users.id }).from(users).where(eq(users.id, input.userId)).for("update");
+      const [target] = await tx.select(adminFields).from(users).where(eq(users.id, input.userId)).for("update");
       if (!target) throw new AppError("not_found");
+      if ((access.kind === "admin" || isAdminAccount(target)) && !admin.owner) throw ownersOnly();
 
       let membership: typeof organizationMembers.$inferInsert | null = null;
       if (access.kind === "staff") {
@@ -93,6 +100,8 @@ export async function setUserBanned(input: unknown) {
     if (input.userId === admin.id) throw notYourself("block");
 
     await db.transaction(async (tx) => {
+      const [target] = await tx.select(adminFields).from(users).where(eq(users.id, input.userId)).for("update");
+      if (target && isAdminAccount(target) && !admin.owner) throw ownersOnly();
       const changed = await tx
         .update(users)
         .set({ bannedAt: input.banned ? new Date() : null, updatedAt: new Date() })
@@ -126,8 +135,9 @@ export async function deleteUser(input: unknown) {
     if (input.userId === admin.id) throw notYourself("delete");
 
     const orphans = await db.transaction(async (tx) => {
-      const [target] = await tx.select({ id: users.id }).from(users).where(eq(users.id, input.userId)).for("update");
+      const [target] = await tx.select(adminFields).from(users).where(eq(users.id, input.userId)).for("update");
       if (!target) throw new AppError("not_found");
+      if (isAdminAccount(target) && !admin.owner) throw ownersOnly();
 
       // The "me too" count on each report is kept by hand: remember which ones lose a vote.
       const confirmed = await tx.select({ reportId: reportConfirmations.reportId }).from(reportConfirmations).where(eq(reportConfirmations.userId, target.id));
