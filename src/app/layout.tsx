@@ -7,7 +7,8 @@ import "./globals.css";
 
 const golos = Golos_Text({
   variable: "--font-golos",
-  subsets: ["latin", "cyrillic"],
+  // Mongolian Ө/Ү (U+04E8, U+04AE) live in cyrillic-ext, not cyrillic.
+  subsets: ["latin", "cyrillic", "cyrillic-ext"],
   weight: ["400", "500", "600", "700", "800"],
 });
 

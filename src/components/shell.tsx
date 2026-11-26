@@ -10,7 +10,6 @@ import {
   Flag,
   Globe,
   LayoutDashboard,
-  List,
   LogIn,
   LogOut,
   Map as MapIcon,
@@ -128,9 +127,7 @@ export function AppHeader() {
           )}
         </nav>
         <div className="ml-auto flex items-center gap-1.5">
-          <span className="hidden sm:inline-flex">
-            <LangToggle />
-          </span>
+          <LangToggle />
           <span className="hidden sm:inline-flex">
             <ThemeToggle />
           </span>
@@ -152,10 +149,12 @@ export function AppHeader() {
             </span>
           )}
           <NotificationBell />
-          <ButtonLink href="/reports/new" variant="primary" icon={Plus} className="px-3 sm:px-4">
-            <span className="hidden sm:inline">{t("Асуудал мэдээлэх", "Report a problem")}</span>
-            <span className="sm:hidden">{t("Мэдээлэх", "Report")}</span>
-          </ButtonLink>
+          {/* On a phone the tab bar carries Report; the header keeps it for larger screens. */}
+          <span className="hidden lg:inline-flex">
+            <ButtonLink href="/reports/new" variant="primary" icon={Plus}>
+              {t("Мэдээлэх", "Report")}
+            </ButtonLink>
+          </span>
           <span className="inline-flex lg:hidden">
             <IconButton icon={Menu} label={t("Цэс", "Menu")} onClick={() => setMenu(true)} />
           </span>
@@ -218,19 +217,17 @@ export function MobileTabBar() {
   if (pathname === "/reports/new") return null;
   const tabs: { href: string; mn: string; en: string; icon: LucideIcon; match: (p: string) => boolean; primary?: boolean }[] = [
     { href: "/", mn: "Зураг", en: "Map", icon: MapIcon, match: (p) => p === "/" },
-    { href: "/?view=list", mn: "Жагсаалт", en: "List", icon: List, match: () => false },
     { href: "/reports/new", mn: "Мэдээлэх", en: "Report", icon: Plus, match: () => false, primary: true },
     { href: "/my-reports", mn: "Миний", en: "Mine", icon: UserIcon, match: (p) => p.startsWith("/my-reports") },
-    { href: "/statistics", mn: "Статистик", en: "Stats", icon: BarChart3, match: (p) => p.startsWith("/statistics") },
   ];
   return (
     <>
-    <div aria-hidden className="h-[calc(64px+env(safe-area-inset-bottom))] md:hidden" />
+    <div aria-hidden className="h-[calc(68px+env(safe-area-inset-bottom))] md:hidden" />
     <nav
       aria-label={t("Доод цэс", "Tab bar")}
       className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden"
     >
-      <ul className="grid h-16 grid-cols-5">
+      <ul className="grid h-[68px] grid-cols-[1fr_1.4fr_1fr] items-center">
         {tabs.map((tab) => {
           const active = tab.match(pathname);
           return (
@@ -239,17 +236,13 @@ export function MobileTabBar() {
                 href={tab.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex h-full flex-col items-center justify-center gap-0.5 text-[12px] font-[550]",
-                  active ? "text-brand" : "text-ink-muted",
+                  "flex items-center justify-center font-[550]",
+                  tab.primary
+                    ? "mx-1.5 h-[52px] gap-2 rounded-md bg-brand text-label text-on-brand"
+                    : cn("h-[68px] flex-col gap-0.5 text-[12.5px]", active ? "text-brand" : "text-ink-subtle"),
                 )}
               >
-                {tab.primary ? (
-                  <span className="grid h-8 w-11 place-items-center rounded-sm bg-brand text-on-brand">
-                    <tab.icon aria-hidden className="size-5" strokeWidth={2} />
-                  </span>
-                ) : (
-                  <tab.icon aria-hidden className="size-5" strokeWidth={1.75} />
-                )}
+                <tab.icon aria-hidden className="size-5" strokeWidth={tab.primary ? 2 : 1.75} />
                 {t(tab.mn, tab.en)}
               </Link>
             </li>

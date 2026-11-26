@@ -1,27 +1,34 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { MapPinOff, Search, SlidersHorizontal, X } from "lucide-react";
-import { Button, ButtonLink, IconButton } from "@/components/ui/button";
-import { EmptyState, PageSkeleton, SampleDataPill } from "@/components/ui/feedback";
-import { FilterChip, SegmentedControl, Select } from "@/components/ui/form";
-import { Sheet } from "@/components/ui/overlay";
-import { ReportCard } from "@/components/fixub/report-parts";
+import { MapPinOff, Search, X } from "lucide-react";
+import { Button, IconButton } from "@/components/ui/button";
+import { EmptyState, PageSkeleton, SampleDataPill, useToast } from "@/components/ui/feedback";
+import { ReportRow } from "@/components/fixub/report-parts";
 import { ReportMap } from "@/components/fixub/report-map";
-import { useToast } from "@/components/ui/feedback";
+import { Photo } from "@/components/fixub/photo";
 import { cn } from "@/lib/cn";
-import { summarize } from "@/lib/domain/metrics";
-import { formatHours, formatNumber } from "@/lib/format";
+import { reportTitle, resolvedAt, summarize } from "@/lib/domain/metrics";
+import { formatHours } from "@/lib/format";
 import { useT } from "@/lib/i18n";
 import type { Catalog } from "@/lib/catalog";
-import { DISTRICT_META, STATUS_META, STATUS_ORDER } from "@/lib/meta";
+import { DISTRICT_META, ICONS, OPEN_STATUSES } from "@/lib/meta";
 import { fetchApi } from "@/lib/api/hooks";
 import type { ReportsResponse } from "@/lib/api/types";
 import { useNow, useStore } from "@/lib/store";
-import type { CategorySlug, Report, ReportStatus } from "@/lib/types";
+import type { CategorySlug, Report, ReportStatus, StatusTimelineEvent } from "@/lib/types";
 
-const DEFAULT_STATUSES: ReportStatus[] = ["reported", "investigating", "in_progress", "resolved"];
+/** What the phone shows first: open problems, the fixed ones, or both. */
+type Tab = "open" | "fixed" | "all";
+const TAB_STATUSES: Record<Tab, ReportStatus[]> = {
+  open: OPEN_STATUSES,
+  fixed: ["resolved"],
+  all: [...OPEN_STATUSES, "resolved"],
+};
+const REF_LIKE = /^FX-?\d{2}-?\d{4,}$/i;
+const hideScrollbar = "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 
 export function matchesQuery(r: Report, q: string, catalog: Catalog) {
   if (!q) return true;
@@ -58,18 +65,11 @@ export function HomeExplorer() {
   const now = useNow();
 
   // Filters live in the URL so views can be shared (FR-002).
-  const statuses = useMemo(() => {
-    const raw = params.get("status");
-    return raw ? (raw.split(",").filter((s) => s in STATUS_META) as ReportStatus[]) : DEFAULT_STATUSES;
-  }, [params]);
+  const tab: Tab = params.get("tab") === "fixed" ? "fixed" : params.get("tab") === "all" ? "all" : "open";
   const category = (params.get("cat") ?? "all") as CategorySlug | "all";
-  const subcategory = params.get("sub") ?? "all";
-  const view = params.get("view") === "list" ? "list" : "map";
   const [q, setQ] = useState(params.get("q") ?? "");
   const deferredQ = useDeferredValue(q);
   const [selectedId, setSelectedId] = useState<string | null>(params.get("sel"));
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [track, setTrack] = useState("");
   const [trackError, setTrackError] = useState("");
   const listRefs = useRef(new Map<string, HTMLButtonElement>());
 
@@ -95,233 +95,167 @@ export function HomeExplorer() {
   const base = useMemo(
     () =>
       publicReports.filter(
-        (r) =>
-          (category === "all" || r.category === category) &&
-          (subcategory === "all" || r.subcategory === subcategory) &&
-          matchesQuery(r, deferredQ.trim(), catalog),
+        (r) => (category === "all" || r.category === category) && matchesQuery(r, deferredQ.trim(), catalog),
       ),
-    [publicReports, category, subcategory, deferredQ, catalog],
+    [publicReports, category, deferredQ, catalog],
   );
+  const statuses = TAB_STATUSES[tab];
   const shown = useMemo(
     () => base.filter((r) => statuses.includes(r.status)).sort((a, b) => b.createdAt - a.createdAt),
     [base, statuses],
   );
   const counts = useMemo(() => {
-    const c = Object.fromEntries(STATUS_ORDER.map((s) => [s, 0])) as Record<ReportStatus, number>;
-    for (const r of base) c[r.status]++;
-    return c;
+    const n = (list: ReportStatus[]) => base.filter((r) => list.includes(r.status)).length;
+    return { open: n(TAB_STATUSES.open), fixed: n(TAB_STATUSES.fixed), all: n(TAB_STATUSES.all) };
   }, [base]);
   const stats = useMemo(() => summarize(publicReports, now, 30), [publicReports, now]);
+  const recentlyFixed = useMemo(
+    () =>
+      publicReports
+        .filter((r) => r.status === "resolved")
+        .map((r) => ({ r, at: Math.max(0, ...resolvedAt(r)) }))
+        .filter((x) => x.at > 0)
+        .sort((a, b) => b.at - a.at)
+        .slice(0, 4),
+    [publicReports],
+  );
 
+  // Keep the selected row in view inside the desktop list. On a phone the page itself scrolls, so leave it be.
   useEffect(() => {
-    if (selectedId) listRefs.current.get(selectedId)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    if (selectedId && window.matchMedia("(min-width: 768px)").matches) {
+      listRefs.current.get(selectedId)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
   }, [selectedId]);
 
   if (!ready) return <PageSkeleton />;
 
-  const toggleStatus = (s: ReportStatus, on: boolean) => {
-    const next = on ? STATUS_ORDER.filter((x) => x === s || statuses.includes(x)) : statuses.filter((x) => x !== s);
-    const same = next.length === DEFAULT_STATUSES.length && next.every((x) => DEFAULT_STATUSES.includes(x));
-    setParam({ status: same ? null : next.join(",") || "none" });
-  };
-
-  const onTrack = async (e: React.FormEvent) => {
+  // One field for both jobs: a reference number opens that report, anything else narrows the map and list.
+  const onSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    const ref = track.trim().toUpperCase().replace(/\s/g, "");
-    let hit = state.reports.find((r) => r.ref === ref || r.ref.endsWith(ref.replace(/^FX-?/, "")) && ref.length >= 4);
+    const ref = q.trim().toUpperCase().replace(/\s/g, "");
+    if (!REF_LIKE.test(ref)) return;
+    let hit = state.reports.find((r) => r.ref === ref || (r.ref.endsWith(ref.replace(/^FX-?/, "")) && ref.length >= 4));
     // Not among the recent ones on this page: ask the server for that exact reference.
     if (!hit && /^FX-\d{2}-\d{5,}$/.test(ref)) {
       hit = (await fetchApi<ReportsResponse>(`/api/v1/reports?ref=${ref}`).catch(() => null))?.reports[0];
     }
     if (hit && hit.visibility === "visible") router.push(`/reports/${hit.id}`);
-    else setTrackError(t("Ийм дугаартай мэдээлэл олдсонгүй. Жишээ: FX-26-04101", "No report with that reference. Example: FX-26-04101"));
+    else setTrackError(t("Ийм дугаартай мэдээлэл олдсонгүй. Жишээ: FX-26-04101", "No report with that number. Example: FX-26-04101"));
   };
 
-  const filters = (
-    <div className="flex flex-wrap items-center gap-2">
-      {STATUS_ORDER.map((s) => (
-        <FilterChip key={s} dot={s} selected={statuses.includes(s)} count={counts[s]} onToggle={(on) => toggleStatus(s, on)}>
-          {pick(STATUS_META[s].label)}
-        </FilterChip>
-      ))}
-      <Select
-        label={t("Ангилал", "Category")}
-        hideLabel
-        size="sm"
-        value={category}
-        onChange={(v) => setParam({ cat: v === "all" ? null : v, sub: null })}
-        options={[
-          { value: "all", label: t("Бүх ангилал", "All categories") },
-          ...catalog.list.map((c) => ({ value: c.id, label: pick(c.name) })),
-        ]}
-        className="w-56"
-      />
-      {category !== "all" && catalog.get(category) && (
-        <Select
-          label={t("Дэд ангилал", "Subcategory")}
-          hideLabel
-          size="sm"
-          value={subcategory}
-          onChange={(v) => setParam({ sub: v === "all" ? null : v })}
-          options={[
-            { value: "all", label: t("Бүх дэд ангилал", "All subcategories") },
-            ...catalog.get(category)!.subcategories.map((x) => ({ value: x.id, label: pick(x.name) })),
-          ]}
-          className="w-64 max-w-full"
-        />
-      )}
-    </div>
-  );
+  const clearAll = () => {
+    setQ("");
+    router.replace("/", { scroll: false });
+  };
 
-  const list = (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center justify-between border-b border-line px-4 py-2.5 text-small text-ink-muted">
-        <span aria-live="polite">
-          <b className="font-[650] text-ink tnum">{shown.length}</b> {t("мэдээлэл", shown.length === 1 ? "report" : "reports")}
-        </span>
-        <span>{t("Шинэ нь эхэндээ", "Newest first")}</span>
-      </div>
-      {shown.length === 0 ? (
-        <EmptyState
-          icon={MapPinOff}
-          title={t("Тохирох мэдээлэл алга", "No reports match")}
-          action={
-            <Button
-              onClick={() => {
-                setQ("");
-                router.replace("/", { scroll: false });
-              }}
-            >
-              {t("Шүүлтүүрийг цэвэрлэх", "Clear filters")}
-            </Button>
-          }
-        >
-          {t("Эдгээр шүүлтүүрээр юу ч олдсонгүй. Асуудал харвал анхных нь болж мэдээлээрэй.", "Nothing here with these filters. If you see a problem, you can be the first to report it.")}
-        </EmptyState>
-      ) : (
-        <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3" aria-label={t("Мэдээллийн жагсаалт", "Report list")}>
-          {shown.map((r) => (
-            <li key={r.id}>
-              <ReportCard
-                ref={(el) => {
-                  if (el) listRefs.current.set(r.id, el);
-                  else listRefs.current.delete(r.id);
-                }}
-                report={r}
-                now={now}
-                selected={r.id === selectedId}
-                fresh={freshIds.has(r.id)}
-                onOpen={(id) => router.push(`/reports/${id}`)}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
+  const tabs: { id: Tab; label: string }[] = [
+    { id: "open", label: t("Нээлттэй", "Open") },
+    { id: "fixed", label: t("Засагдсан", "Fixed") },
+    { id: "all", label: t("Бүгд", "All") },
+  ];
 
   return (
-    <div className="mx-auto max-w-[1200px] px-4 pt-6 md:px-6 md:pt-8">
-      {/* Intro + tracking */}
-      <section className="grid gap-6 lg:grid-cols-[1fr_380px] lg:items-end">
+    <div className="mx-auto max-w-[1120px] px-4 md:px-6">
+      {/* Numbers first, then one search field */}
+      <section className="pt-5 md:grid md:grid-cols-[1.2fr_1fr] md:items-end md:gap-10 md:pt-9" aria-labelledby="home-title">
         <div>
-          <h1 className="max-w-[24ch] text-display font-[650] tracking-tight">
-            {t("Хотын асуудлыг хамтдаа шийдье", "See and report problems on Ulaanbaatar’s streets")}
+          <h1 id="home-title" className="text-[28px] font-[700] leading-[34px] tracking-tight md:text-display">
+            <span className="text-brand tnum">{stats.open}</span> {t("нээлттэй", "open")} ·{" "}
+            <span className="text-[var(--status-resolved-text)] tnum">{stats.resolved}</span> {t("засагдсан", "fixed")}
           </h1>
-          <p className="mt-3 max-w-[60ch] text-body-lg text-ink-muted">
-            {t(
-              "Замын нүх, асахгүй гэрэл, дүүрсэн хогийн сав. Байршлаа тэмдэглэж, зураг нэмээд хариуцах байгууллагын явцыг олон нийтэд нээлттэй хянаарай.",
-              "Potholes, broken lights, overflowing bins. Drop a pin, add a photo, and follow the responsible organization’s progress in public.",
-            )}
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-small text-ink-subtle">
+            <span>
+              {t("Сүүлийн 30 хоног", "Last 30 days")}
+              {stats.medianResponse !== null && ` · ${t("анхны хариу", "first reply in")} ${formatHours(stats.medianResponse, lang)}`}
+            </span>
+            <SampleDataPill />
           </p>
         </div>
-        <form onSubmit={onTrack} className="lg:pb-1" noValidate>
-          <label htmlFor="track" className="text-label font-[550]">
-            {t("Мэдээллээ хянах", "Track a report")}
+        <form onSubmit={onSearch} className="mt-3.5 md:mt-0" noValidate role="search">
+          <label htmlFor="home-search" className="sr-only">
+            {t("Гудамж, дүүрэг эсвэл мэдээллийн дугаараар хайх", "Search by street, district or report number")}
           </label>
-          <div className="mt-1.5 flex gap-2">
-            <div className="relative flex-1">
-              <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-ink-subtle" />
-              <input
-                id="track"
-                value={track}
-                onChange={(e) => {
-                  setTrack(e.target.value);
+          <div className="relative">
+            <Search aria-hidden className="pointer-events-none absolute left-3.5 top-1/2 size-5 -translate-y-1/2 text-ink-subtle" />
+            <input
+              id="home-search"
+              type="search"
+              enterKeyHint="search"
+              autoComplete="off"
+              value={q}
+              onChange={(e) => {
+                setQ(e.target.value);
+                setTrackError("");
+              }}
+              placeholder={t("Гудамж, дүүрэг эсвэл дугаар", "Street, district or report number")}
+              aria-invalid={!!trackError || undefined}
+              aria-describedby={trackError ? "search-err" : undefined}
+              className="h-[52px] w-full rounded-md border border-line-strong bg-surface pl-11 pr-11 text-body placeholder:text-ink-subtle"
+            />
+            {q && (
+              <IconButton
+                icon={X}
+                label={t("Цэвэрлэх", "Clear")}
+                className="absolute right-1 top-1/2 -translate-y-1/2"
+                onClick={() => {
+                  setQ("");
                   setTrackError("");
                 }}
-                placeholder="FX-26-04101"
-                aria-invalid={!!trackError || undefined}
-                aria-describedby={trackError ? "track-err" : undefined}
-                className="h-10 w-full rounded-sm border border-line-strong bg-surface pl-10 pr-3 text-body tnum placeholder:text-ink-subtle [@media(pointer:coarse)]:h-11"
               />
-            </div>
-            <Button type="submit">{t("Хайх", "Find")}</Button>
+            )}
           </div>
           {trackError && (
-            <p id="track-err" role="alert" className="mt-1.5 text-small font-[550] text-danger">
+            <p id="search-err" role="alert" className="mt-1.5 text-small font-[550] text-danger">
               {trackError}
             </p>
           )}
         </form>
       </section>
 
-      {/* City numbers: each explains itself */}
-      <section aria-label={t("Хотын тоо баримт", "City numbers")} className="mt-6 grid gap-3 sm:grid-cols-3">
-        {[
-          { label: t("Нээлттэй мэдээлэл", "Open reports"), value: formatNumber(stats.open), def: t("Мэдээлэгдсэн, шалгаж буй эсвэл засварлаж буй", "Reported, investigating or in progress") },
-          { label: t("Сүүлийн 30 хоногт шийдвэрлэсэн", "Resolved in the last 30 days"), value: formatNumber(stats.resolved), def: t("Байгууллага шийдвэрлэсэн гэж тэмдэглэсэн", "Marked resolved by an organization") },
-          { label: t("Анхны хариу (медиан)", "Median first response"), value: formatHours(stats.medianResponse, lang), def: t("Мэдээлснээс анхны төлөв өөрчлөгдөх хүртэл, сүүлийн 30 хоног", "Reported → first status change, last 30 days") },
-        ].map((k) => (
-          <div key={k.label} className="rounded-md border border-line bg-surface p-4 shadow-xs">
-            <p className="text-small text-ink-muted">{k.label}</p>
-            <p className="mt-1 text-metric font-[650] tnum">{k.value}</p>
-            <p className="mt-1 text-caption text-ink-subtle">{k.def}</p>
-          </div>
-        ))}
-      </section>
-
-      {/* Explorer */}
-      <section className="mt-8" aria-labelledby="explorer-title">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 id="explorer-title" className="text-title-2 font-[600]">
-            {t("Улаанбаатар дахь мэдээллүүд", "Reports in Ulaanbaatar")}
-          </h2>
-          <SampleDataPill />
+      <section className="mt-3" aria-label={t("Улаанбаатар дахь мэдээллүүд", "Reports in Ulaanbaatar")}>
+        <div role="group" aria-label={t("Төлвөөр шүүх", "Filter by status")} className="grid grid-cols-3 gap-1 rounded-md bg-surface-sunken p-1">
+          {tabs.map((x) => (
+            <button
+              key={x.id}
+              type="button"
+              aria-pressed={tab === x.id}
+              onClick={() => setParam({ tab: x.id === "open" ? null : x.id })}
+              className={cn(
+                "flex min-h-12 items-center justify-center gap-1.5 rounded-sm text-label font-[600] transition-colors duration-[140ms]",
+                tab === x.id ? "bg-surface text-ink shadow-xs" : "text-ink-muted hover:text-ink",
+              )}
+            >
+              {x.label}
+              <span className="font-[500] text-ink-subtle tnum">{counts[x.id]}</span>
+            </button>
+          ))}
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <div className="relative min-w-0 flex-1 sm:max-w-sm">
-            <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-ink-subtle" />
-            <input
-              type="search"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              aria-label={t("Гарчиг, байршил, дүүргээр хайх", "Search by title, place or district")}
-              placeholder={t("Жишээ: Энхтайваны өргөн чөлөө", "e.g. Peace Avenue")}
-              className="h-10 w-full rounded-sm border border-line-strong bg-surface pl-10 pr-9 text-body placeholder:text-ink-subtle [@media(pointer:coarse)]:h-11"
-            />
-            {q && (
-              <IconButton icon={X} label={t("Цэвэрлэх", "Clear")} size="sm" className="absolute right-1 top-1/2 -translate-y-1/2" onClick={() => setQ("")} />
-            )}
-          </div>
-          <Button icon={SlidersHorizontal} className="md:hidden" onClick={() => setFiltersOpen(true)}>
-            {t("Шүүлтүүр", "Filters")}
-          </Button>
-          <SegmentedControl
-            className="md:hidden"
-            label={t("Харагдац", "View")}
-            value={view}
-            onChange={(v) => setParam({ view: v === "list" ? "list" : null })}
-            options={[
-              { value: "map", label: t("Газрын зураг", "Map") },
-              { value: "list", label: t("Жагсаалт", "List") },
-            ]}
-          />
+        <div role="group" aria-label={t("Ангилалаар шүүх", "Filter by category")} className={cn("mt-2.5 flex gap-2 overflow-x-auto pb-1.5", hideScrollbar)}>
+          {[{ id: "all", label: t("Бүх ангилал", "All types"), Icon: ICONS.ellipsis }, ...catalog.list.map((c) => ({ id: c.id, label: pick(c.name), Icon: ICONS[c.icon] ?? ICONS.ellipsis }))].map(
+            ({ id, label, Icon }) => {
+              const on = category === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setParam({ cat: id === "all" ? null : id })}
+                  className={cn(
+                    "inline-flex h-11 shrink-0 items-center gap-2 rounded-full border px-3.5 text-body font-[500] whitespace-nowrap transition-colors duration-[140ms]",
+                    on ? "border-transparent bg-brand-soft font-[600] text-brand" : "border-line bg-surface text-ink-muted hover:text-ink",
+                  )}
+                >
+                  <Icon aria-hidden className="size-[18px]" strokeWidth={1.75} />
+                  {label}
+                </button>
+              );
+            },
+          )}
         </div>
-        <div className="mt-3 hidden md:block">{filters}</div>
 
-        <div className="mt-3 overflow-hidden rounded-md border border-line bg-surface shadow-xs md:grid md:h-[600px] md:grid-cols-[1fr_340px] lg:grid-cols-[1fr_380px]">
-          <div className={cn("relative h-[62dvh] min-h-[360px] md:h-full", view === "list" && "hidden md:block")}>
+        <div className="mt-2 overflow-hidden rounded-lg border border-line bg-surface shadow-xs md:grid md:h-[640px] md:grid-cols-[1fr_380px]">
+          <div className="relative h-[46dvh] min-h-[320px] md:h-full">
             <ReportMap
               className="h-full w-full"
               ariaLabel={t("Улаанбаатарын мэдээллийн газрын зураг", "Map of reports in Ulaanbaatar")}
@@ -329,54 +263,86 @@ export function HomeExplorer() {
               selectedId={selectedId}
               onSelect={(id) => setSelectedId(id)}
               detailHref={(id) => `/reports/${id}`}
-              legendStatuses={statuses.length ? statuses : STATUS_ORDER}
+              legendStatuses={statuses}
               onLocateError={(m) => toast({ tone: "info", title: m })}
+              compact
             />
           </div>
-          <div className={cn("border-line md:h-full md:min-h-0 md:border-l", view === "map" && "hidden md:block", view === "list" && "min-h-[50dvh]")}>
-            {list}
+          <div className="border-t border-line md:flex md:h-full md:min-h-0 md:flex-col md:border-l md:border-t-0">
+            <p className="px-4 py-3 text-small text-ink-subtle" aria-live="polite">
+              <b className="font-[600] text-ink tnum">{shown.length}</b> {t("мэдээлэл", shown.length === 1 ? "report" : "reports")}
+            </p>
+            {shown.length === 0 ? (
+              <EmptyState
+                icon={MapPinOff}
+                title={t("Тохирох мэдээлэл алга", "No reports match")}
+                action={<Button onClick={clearAll}>{t("Шүүлтүүрийг цэвэрлэх", "Clear filters")}</Button>}
+              >
+                {t("Асуудал харвал анхных нь болж мэдээлээрэй.", "If you see a problem, you can be the first to report it.")}
+              </EmptyState>
+            ) : (
+              <ul className="divide-y divide-line border-t border-line md:min-h-0 md:flex-1 md:overflow-y-auto" aria-label={t("Мэдээллийн жагсаалт", "Report list")}>
+                {shown.map((r) => (
+                  <li key={r.id}>
+                    <ReportRow
+                      ref={(el) => {
+                        if (el) listRefs.current.set(r.id, el);
+                        else listRefs.current.delete(r.id);
+                      }}
+                      report={r}
+                      now={now}
+                      selected={r.id === selectedId}
+                      fresh={freshIds.has(r.id)}
+                      onOpen={(id) => router.push(`/reports/${id}`)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
         <p className="mt-2 text-caption text-ink-subtle">
-          {t(
-            "Газрын зураг: © OpenStreetMap-ийн хувь нэмэр оруулагчид, OpenFreeMap. Хаагдсан мэдээллүүд анхдагчаар нуугдана.",
-            "Map: © OpenStreetMap contributors, OpenFreeMap. Closed reports are hidden by default.",
-          )}
+          {t("Газрын зураг: © OpenStreetMap-ийн хувь нэмэр оруулагчид, OpenFreeMap.", "Map: © OpenStreetMap contributors, OpenFreeMap.")}
         </p>
       </section>
 
-      <section className="my-12 grid gap-4 rounded-md border border-line bg-surface p-5 md:grid-cols-[1fr_auto] md:items-center md:p-6">
-        <div>
-          <h2 className="text-title-3 font-[600]">{t("Хэрхэн ажилладаг вэ", "How it works")}</h2>
-          <ol className="mt-2 grid gap-2 text-small text-ink-muted sm:grid-cols-3">
-            <li>
-              <b className="text-ink">1. {t("Мэдээлэх", "Report")}</b> — {t("байршил, ангилал, зураг", "location, category, photo")}
-            </li>
-            <li>
-              <b className="text-ink">2. {t("Хуваарилах", "Assign")}</b> — {t("FixUB баг хариуцагчид шилжүүлнэ", "the FixUB team routes it to an organization")}
-            </li>
-            <li>
-              <b className="text-ink">3. {t("Хянах", "Track")}</b> — {t("явц нь олон нийтэд нээлттэй", "progress is public")}
-            </li>
-          </ol>
-        </div>
-        <ButtonLink href="/reports/new" variant="primary" size="lg">
-          {t("Асуудал мэдээлэх", "Report a problem")}
-        </ButtonLink>
-      </section>
-
-      <Sheet
-        open={filtersOpen}
-        title={t("Шүүлтүүр", "Filters")}
-        onClose={() => setFiltersOpen(false)}
-        footer={
-          <Button variant="primary" fullWidth onClick={() => setFiltersOpen(false)}>
-            {t(`${shown.length} мэдээлэл харах`, `Show ${shown.length} reports`)}
-          </Button>
-        }
-      >
-        {filters}
-      </Sheet>
+      {recentlyFixed.length > 0 && (
+        <section className="mb-10 mt-8" aria-labelledby="fixed-title">
+          <h2 id="fixed-title" className="text-title-3 font-[700]">
+            {t("Сүүлд засагдсан", "Recently fixed")}
+          </h2>
+          <ul className={cn("-mx-4 mt-2.5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 md:mx-0 md:px-0", hideScrollbar)}>
+            {recentlyFixed.map(({ r, at }) => (
+              <li key={r.id} className="w-[78%] max-w-[300px] shrink-0 snap-start">
+                <FixedCard report={r} fixedAt={at} catalog={catalog} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
+  );
+}
+
+/** Before and after side by side, the title and how long the fix took. */
+function FixedCard({ report, fixedAt, catalog }: { report: Report; fixedAt: number; catalog: Catalog }) {
+  const { lang, t } = useT();
+  const after = (report.timeline.filter((e): e is StatusTimelineEvent => e.type === "status" && e.to === "resolved" && !!e.photoId).pop())?.photoId;
+  const before = report.photoIds[0];
+  const days = Math.max(1, Math.round((fixedAt - report.createdAt) / 864e5));
+  const tile = "aspect-[4/3] w-full";
+  return (
+    <Link href={`/reports/${report.id}`} className="block overflow-hidden rounded-lg border border-line bg-surface shadow-xs">
+      <div className="grid grid-cols-2 gap-0.5">
+        {before ? <Photo id={before} alt={t("Өмнө", "Before")} category={report.category} className={tile} /> : <div className={cn(tile, "bg-surface-sunken")} />}
+        {after ? <Photo id={after} alt={t("Дараа", "After")} category={report.category} className={tile} /> : <div className={cn(tile, "bg-surface-sunken")} />}
+      </div>
+      <div className="px-3.5 pb-3.5 pt-3">
+        <p className="line-clamp-2 text-label font-[600] leading-snug">{reportTitle(report, lang, catalog)}</p>
+        <p className="mt-0.5 text-small font-[500] text-[var(--status-resolved-text)]">
+          {t(`${days} хоногт засагдсан`, `Fixed in ${days} ${days === 1 ? "day" : "days"}`)}
+        </p>
+      </div>
+    </Link>
   );
 }
