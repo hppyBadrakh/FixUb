@@ -9,6 +9,8 @@ import { EmptyState, PageSkeleton, SampleDataPill, useToast } from "@/components
 import { ReportRow } from "@/components/fixub/report-parts";
 import { ReportMap } from "@/components/fixub/report-map";
 import { Photo } from "@/components/fixub/photo";
+import { BottomSheet, type SheetSnap } from "@/components/ui/bottom-sheet";
+import { useMediaQuery } from "@/lib/use-media-query";
 import { cn } from "@/lib/cn";
 import { reportTitle, resolvedAt, summarize } from "@/lib/domain/metrics";
 import { formatHours } from "@/lib/format";
@@ -27,6 +29,8 @@ const TAB_STATUSES: Record<Tab, ReportStatus[]> = {
   fixed: ["resolved"],
   all: [...OPEN_STATUSES, "resolved"],
 };
+/** Height of the collapsed list sheet on a phone: grab bar plus the count. */
+const SHEET_PEEK = 72;
 const REF_LIKE = /^FX-?\d{2}-?\d{4,}$/i;
 const hideScrollbar = "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 
@@ -71,6 +75,8 @@ export function HomeExplorer() {
   const deferredQ = useDeferredValue(q);
   const [selectedId, setSelectedId] = useState<string | null>(params.get("sel"));
   const [trackError, setTrackError] = useState("");
+  const wide = useMediaQuery("(min-width: 768px)");
+  const [snap, setSnap] = useState<SheetSnap>(0);
   const listRefs = useRef(new Map<string, HTMLButtonElement>());
 
   const setParam = (patch: Record<string, string | null>) => {
@@ -147,6 +153,56 @@ export function HomeExplorer() {
     setQ("");
     router.replace("/", { scroll: false });
   };
+
+  const map = (
+    <ReportMap
+      className="h-full w-full"
+      ariaLabel={t("Улаанбаатарын мэдээллийн газрын зураг", "Map of reports in Ulaanbaatar")}
+      reports={shown}
+      selectedId={selectedId}
+      onSelect={(id) => {
+        setSelectedId(id);
+        if (id) setSnap(0); // make room for the selected report's panel
+      }}
+      detailHref={(id) => `/reports/${id}`}
+      legendStatuses={statuses}
+      onLocateError={(m) => toast({ tone: "info", title: m })}
+      compact
+    />
+  );
+  const countLine = (
+    <>
+      <b className="font-[600] text-ink tnum">{shown.length}</b> {t("мэдээлэл", shown.length === 1 ? "report" : "reports")}
+    </>
+  );
+  const listBody =
+    shown.length === 0 ? (
+      <EmptyState
+        icon={MapPinOff}
+        title={t("Тохирох мэдээлэл алга", "No reports match")}
+        action={<Button onClick={clearAll}>{t("Шүүлтүүрийг цэвэрлэх", "Clear filters")}</Button>}
+      >
+        {t("Асуудал харвал анхных нь болж мэдээлээрэй.", "If you see a problem, you can be the first to report it.")}
+      </EmptyState>
+    ) : (
+      <ul className="divide-y divide-line" aria-label={t("Мэдээллийн жагсаалт", "Report list")}>
+        {shown.map((r) => (
+          <li key={r.id}>
+            <ReportRow
+              ref={(el) => {
+                if (el) listRefs.current.set(r.id, el);
+                else listRefs.current.delete(r.id);
+              }}
+              report={r}
+              now={now}
+              selected={r.id === selectedId}
+              fresh={freshIds.has(r.id)}
+              onOpen={(id) => router.push(`/reports/${id}`)}
+            />
+          </li>
+        ))}
+      </ul>
+    );
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "open", label: t("Нээлттэй", "Open") },
@@ -254,53 +310,35 @@ export function HomeExplorer() {
           )}
         </div>
 
-        <div className="mt-2 overflow-hidden rounded-lg border border-line bg-surface shadow-xs md:grid md:h-[640px] md:grid-cols-[1fr_380px]">
-          <div className="relative h-[46dvh] min-h-[320px] md:h-full">
-            <ReportMap
-              className="h-full w-full"
-              ariaLabel={t("Улаанбаатарын мэдээллийн газрын зураг", "Map of reports in Ulaanbaatar")}
-              reports={shown}
-              selectedId={selectedId}
-              onSelect={(id) => setSelectedId(id)}
-              detailHref={(id) => `/reports/${id}`}
-              legendStatuses={statuses}
-              onLocateError={(m) => toast({ tone: "info", title: m })}
-              compact
-            />
+        {wide ? (
+          <div className="mt-2 grid h-[640px] grid-cols-[1fr_380px] overflow-hidden rounded-lg border border-line bg-surface shadow-xs">
+            <div className="relative h-full">{map}</div>
+            <div className="flex h-full min-h-0 flex-col border-l border-line">
+              <p className="px-4 py-3 text-small text-ink-subtle" aria-live="polite">
+                {countLine}
+              </p>
+              <div className="min-h-0 flex-1 overflow-y-auto border-t border-line">{listBody}</div>
+            </div>
           </div>
-          <div className="border-t border-line md:flex md:h-full md:min-h-0 md:flex-col md:border-l md:border-t-0">
-            <p className="px-4 py-3 text-small text-ink-subtle" aria-live="polite">
-              <b className="font-[600] text-ink tnum">{shown.length}</b> {t("мэдээлэл", shown.length === 1 ? "report" : "reports")}
-            </p>
-            {shown.length === 0 ? (
-              <EmptyState
-                icon={MapPinOff}
-                title={t("Тохирох мэдээлэл алга", "No reports match")}
-                action={<Button onClick={clearAll}>{t("Шүүлтүүрийг цэвэрлэх", "Clear filters")}</Button>}
-              >
-                {t("Асуудал харвал анхных нь болж мэдээлээрэй.", "If you see a problem, you can be the first to report it.")}
-              </EmptyState>
-            ) : (
-              <ul className="divide-y divide-line border-t border-line md:min-h-0 md:flex-1 md:overflow-y-auto" aria-label={t("Мэдээллийн жагсаалт", "Report list")}>
-                {shown.map((r) => (
-                  <li key={r.id}>
-                    <ReportRow
-                      ref={(el) => {
-                        if (el) listRefs.current.set(r.id, el);
-                        else listRefs.current.delete(r.id);
-                      }}
-                      report={r}
-                      now={now}
-                      selected={r.id === selectedId}
-                      fresh={freshIds.has(r.id)}
-                      onOpen={(id) => router.push(`/reports/${id}`)}
-                    />
-                  </li>
-                ))}
-              </ul>
-            )}
+        ) : (
+          // Phone: the map fills the space between the header and the tab bar; the list is a sheet over it.
+          <div
+            className="relative mt-2 h-[max(520px,calc(100dvh-124px-env(safe-area-inset-bottom)))] overflow-hidden rounded-lg border border-line bg-surface shadow-xs"
+            style={{ "--sheet": `${SHEET_PEEK}px` } as React.CSSProperties}
+          >
+            {map}
+            <BottomSheet
+              snap={snap}
+              onSnapChange={setSnap}
+              peek={SHEET_PEEK}
+              label={t("Мэдээллийн жагсаалт", "Report list")}
+              expandLabel={snap === 2 ? t("Жагсаалтыг хураах", "Collapse the list") : t("Жагсаалтыг дэлгэх", "Expand the list")}
+              header={<span aria-live="polite">{countLine}</span>}
+            >
+              {listBody}
+            </BottomSheet>
           </div>
-        </div>
+        )}
         <p className="mt-2 text-caption text-ink-subtle">
           {t("Газрын зураг: © OpenStreetMap-ийн хувь нэмэр оруулагчид, OpenFreeMap.", "Map: © OpenStreetMap contributors, OpenFreeMap.")}
         </p>

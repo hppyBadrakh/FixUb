@@ -418,7 +418,7 @@ export function ReportMap({
         <button
           type="button"
           onClick={locate}
-          className="absolute bottom-8 right-2.5 inline-flex h-10 items-center gap-2 rounded-sm bg-surface-overlay px-3 text-small font-[600] text-ink shadow-md hover:bg-surface-sunken [@media(pointer:coarse)]:h-11"
+          className="absolute bottom-[calc(var(--sheet,0px)+2rem)] right-2.5 inline-flex h-10 items-center gap-2 rounded-sm bg-surface-overlay px-3 text-small font-[600] text-ink shadow-md hover:bg-surface-sunken [@media(pointer:coarse)]:h-11"
         >
           <LocateFixed aria-hidden className={cn("size-5", locating && "fx-spin")} strokeWidth={1.75} />
           {mode === "pick" ? t("Миний байршил", "Use my location") : <span className="sr-only sm:not-sr-only">{t("Миний байршил", "My location")}</span>}
@@ -446,7 +446,7 @@ export function ReportMap({
       )}
 
       {selected && mode === "browse" && (
-        <div className="pointer-events-none absolute inset-x-2.5 bottom-2.5 z-10 flex justify-center md:bottom-4">
+        <div className="pointer-events-none absolute inset-x-2.5 bottom-[calc(var(--sheet,0px)+0.625rem)] z-10 flex justify-center md:bottom-4">
           <section
             aria-label={t("Сонгосон мэдээлэл", "Selected report")}
             className="pointer-events-auto w-full max-w-[400px] rounded-md border border-line bg-surface-overlay p-3.5 shadow-md fx-rise"
