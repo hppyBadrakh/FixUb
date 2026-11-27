@@ -20,6 +20,13 @@ export default function manifest(): MetadataRoute.Manifest {
         url: "/reports/new",
         icons: [{ src: "/icon-192.png", sizes: "192x192", type: "image/png" }],
       },
+      {
+        name: "Миний мэдээлэл",
+        short_name: "Миний",
+        description: "My reports",
+        url: "/my-reports",
+        icons: [{ src: "/icon-192.png", sizes: "192x192", type: "image/png" }],
+      },
     ],
     icons: [
       { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
