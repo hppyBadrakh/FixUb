@@ -133,6 +133,9 @@ export function HomeExplorer() {
     }
   }, [selectedId]);
 
+  // Nothing found: open the sheet so the "no reports match" message and its button are in view.
+  const sheetSnap: SheetSnap = shown.length === 0 && snap === 0 ? 1 : snap;
+
   if (!ready) return <PageSkeleton />;
 
   // One field for both jobs: a reference number opens that report, anything else narrows the map and list.
@@ -204,6 +207,27 @@ export function HomeExplorer() {
       </ul>
     );
 
+  const mapCredit = (className: string) => (
+    <p className={cn("text-caption text-ink-subtle", className)}>
+      {t("Газрын зураг: © OpenStreetMap-ийн хувь нэмэр оруулагчид, OpenFreeMap.", "Map: © OpenStreetMap contributors, OpenFreeMap.")}
+    </p>
+  );
+  const fixedRail = (className: string) =>
+    recentlyFixed.length > 0 && (
+      <section className={className} aria-labelledby="fixed-title">
+        <h2 id="fixed-title" className="text-title-3 font-[700]">
+          {t("Сүүлд засагдсан", "Recently fixed")}
+        </h2>
+        <ul className={cn("-mx-4 mt-2.5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 md:mx-0 md:px-0", hideScrollbar)}>
+          {recentlyFixed.map(({ r, at }) => (
+            <li key={r.id} className="w-[78%] max-w-[300px] shrink-0 snap-start">
+              <FixedCard report={r} fixedAt={at} catalog={catalog} />
+            </li>
+          ))}
+        </ul>
+      </section>
+    );
+
   const tabs: { id: Tab; label: string }[] = [
     { id: "open", label: t("Нээлттэй", "Open") },
     { id: "fixed", label: t("Засагдсан", "Fixed") },
@@ -211,7 +235,9 @@ export function HomeExplorer() {
   ];
 
   return (
-    <div className="mx-auto max-w-[1120px] px-4 md:px-6">
+    // On a phone the page is exactly one screen (between the header and the tab bar): a finger on the
+    // map pans the map, so nothing the visitor needs may sit below it.
+    <div className={cn("mx-auto max-w-[1120px] px-4 md:px-6", !wide && "flex h-[max(520px,calc(100dvh-124px-env(safe-area-inset-bottom)))] flex-col")}>
       {/* Numbers first, then one search field */}
       <section className="pt-5 md:grid md:grid-cols-[1.2fr_1fr] md:items-end md:gap-10 md:pt-9" aria-labelledby="home-title">
         <div>
@@ -246,18 +272,20 @@ export function HomeExplorer() {
               placeholder={t("Гудамж, дүүрэг эсвэл дугаар", "Street, district or report number")}
               aria-invalid={!!trackError || undefined}
               aria-describedby={trackError ? "search-err" : undefined}
-              className="h-[52px] w-full rounded-md border border-line-strong bg-surface pl-11 pr-11 text-body placeholder:text-ink-subtle"
+              className="h-[52px] w-full rounded-md border border-line-strong bg-surface pl-11 pr-11 text-body placeholder:text-ink-subtle [&::-webkit-search-cancel-button]:hidden"
             />
             {q && (
-              <IconButton
-                icon={X}
-                label={t("Цэвэрлэх", "Clear")}
-                className="absolute right-1 top-1/2 -translate-y-1/2"
-                onClick={() => {
-                  setQ("");
-                  setTrackError("");
-                }}
-              />
+              // IconButton is `position: relative` itself, so it can't be absolutely placed directly.
+              <span className="absolute right-1 top-1/2 -translate-y-1/2">
+                <IconButton
+                  icon={X}
+                  label={t("Цэвэрлэх", "Clear")}
+                  onClick={() => {
+                    setQ("");
+                    setTrackError("");
+                  }}
+                />
+              </span>
             )}
           </div>
           {trackError && (
@@ -268,7 +296,7 @@ export function HomeExplorer() {
         </form>
       </section>
 
-      <section className="mt-3" aria-label={t("Улаанбаатар дахь мэдээллүүд", "Reports in Ulaanbaatar")}>
+      <section className={cn("mt-3", !wide && "flex min-h-0 flex-1 flex-col")} aria-label={t("Улаанбаатар дахь мэдээллүүд", "Reports in Ulaanbaatar")}>
         <div role="group" aria-label={t("Төлвөөр шүүх", "Filter by status")} className="grid grid-cols-3 gap-1 rounded-md bg-surface-sunken p-1">
           {tabs.map((x) => (
             <button
@@ -287,7 +315,7 @@ export function HomeExplorer() {
           ))}
         </div>
 
-        <div role="group" aria-label={t("Ангилалаар шүүх", "Filter by category")} className={cn("mt-2.5 flex gap-2 overflow-x-auto pb-1.5", hideScrollbar)}>
+        <div role="group" aria-label={t("Ангилалаар шүүх", "Filter by category")} className={cn("mt-2.5 flex gap-2 overflow-x-auto pb-1.5 md:flex-wrap md:overflow-visible", hideScrollbar)}>
           {[{ id: "all", label: t("Бүх ангилал", "All types"), Icon: ICONS.ellipsis }, ...catalog.list.map((c) => ({ id: c.id, label: pick(c.name), Icon: ICONS[c.icon] ?? ICONS.ellipsis }))].map(
             ({ id, label, Icon }) => {
               const on = category === id;
@@ -321,43 +349,31 @@ export function HomeExplorer() {
             </div>
           </div>
         ) : (
-          // Phone: the map fills the space between the header and the tab bar; the list is a sheet over it.
+          // Phone: the map takes whatever the screen has left; the list, the fixed rail and the credit live in a sheet over it.
           <div
-            className="relative mt-2 h-[max(520px,calc(100dvh-124px-env(safe-area-inset-bottom)))] overflow-hidden rounded-lg border border-line bg-surface shadow-xs"
+            className="relative mb-3 mt-2 min-h-0 flex-1 overflow-hidden rounded-lg border border-line bg-surface shadow-xs"
             style={{ "--sheet": `${SHEET_PEEK}px` } as React.CSSProperties}
           >
             {map}
             <BottomSheet
-              snap={snap}
+              snap={sheetSnap}
               onSnapChange={setSnap}
               peek={SHEET_PEEK}
+              resetScrollKey={`${tab}|${category}|${deferredQ}`}
               label={t("Мэдээллийн жагсаалт", "Report list")}
-              expandLabel={snap === 2 ? t("Жагсаалтыг хураах", "Collapse the list") : t("Жагсаалтыг дэлгэх", "Expand the list")}
+              expandLabel={sheetSnap === 2 ? t("Жагсаалтыг хураах", "Collapse the list") : t("Жагсаалтыг дэлгэх", "Expand the list")}
               header={<span aria-live="polite">{countLine}</span>}
             >
               {listBody}
+              {fixedRail("px-4 pb-2 pt-6")}
+              {mapCredit("px-4 pb-4 pt-2")}
             </BottomSheet>
           </div>
         )}
-        <p className="mt-2 text-caption text-ink-subtle">
-          {t("Газрын зураг: © OpenStreetMap-ийн хувь нэмэр оруулагчид, OpenFreeMap.", "Map: © OpenStreetMap contributors, OpenFreeMap.")}
-        </p>
+        {wide && mapCredit("mt-2")}
       </section>
 
-      {recentlyFixed.length > 0 && (
-        <section className="mb-10 mt-8" aria-labelledby="fixed-title">
-          <h2 id="fixed-title" className="text-title-3 font-[700]">
-            {t("Сүүлд засагдсан", "Recently fixed")}
-          </h2>
-          <ul className={cn("-mx-4 mt-2.5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 md:mx-0 md:px-0", hideScrollbar)}>
-            {recentlyFixed.map(({ r, at }) => (
-              <li key={r.id} className="w-[78%] max-w-[300px] shrink-0 snap-start">
-                <FixedCard report={r} fixedAt={at} catalog={catalog} />
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {wide && fixedRail("mb-10 mt-8")}
     </div>
   );
 }

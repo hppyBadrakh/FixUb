@@ -48,6 +48,10 @@ export function nextStep(r: Report, state: AppState, t: (mn: string, en: string)
 export function ReportDetail() {
   const { id } = useParams<{ id: string }>();
   const { ready, state, user, server, act, freshIds, catalog } = useStore();
+  // Read once into a plain value: React Compiler turned `user?.id` in the JSX below into `user.id`
+  // in a dependency check, which threw for every signed-out visitor.
+  const myId = user ? user.id : null;
+  const isAdmin = user ? user.role === "admin" : false;
   const { lang, t, pick } = useT();
   const toast = useToast();
   const router = useRouter();
@@ -72,7 +76,7 @@ export function ReportDetail() {
   }, [report, state.reports]);
 
   if (!ready || (!listed && single.isLoading)) return <PageSkeleton />;
-  const canSeeHidden = !!report && (user?.role === "admin" || report.reporterId === user?.id);
+  const canSeeHidden = !!report && (isAdmin || (myId !== null && report.reporterId === myId));
   if (!report || (report.visibility === "hidden" && !canSeeHidden)) {
     return (
       <EmptyState
@@ -105,7 +109,7 @@ export function ReportDetail() {
         <ArrowLeft aria-hidden className="size-4" /> {t("Газрын зураг руу", "Back to map")}
       </Link>
 
-      {server.reviewBeforePublic && report.visibility === "visible" && report.priority === null && report.reporterId === user?.id && (
+      {server.reviewBeforePublic && report.visibility === "visible" && report.priority === null && myId !== null && report.reporterId === myId && (
         <Banner tone="info" className="mt-4" title={t("Хянагдахыг хүлээж байна", "Waiting for review")}>
           {t(
             "Одоогоор зөвхөн та харж байна. FixUB баг хянасны дараа нийтэд харагдана.",
@@ -245,11 +249,11 @@ export function ReportDetail() {
           </dl>
           <CitizenSignals
             report={report}
-            userId={user?.id ?? null}
+            userId={myId}
             signedIn={!!user}
             onSignIn={signIn}
             onMeToo={async () => {
-              const had = report.confirmations.includes(user!.id);
+              const had = myId !== null && report.confirmations.includes(myId);
               const res = await act.toggleMeToo(report.id);
               if (!res.ok) toast({ tone: "danger", title: errorText(res.error) });
               else if (had) toast({ tone: "info", title: t("Таны баталгаажуулалтыг хаслаа", "Your confirmation was removed") });

@@ -56,16 +56,19 @@ export function MyReports() {
   if (!ready) return <PageSkeleton />;
   if (!user) {
     return (
-      <EmptyState
-        className="py-24"
-        icon={LogIn}
-        title={t("Өөрийн мэдээллээ харахын тулд нэвтэрнэ үү", "Sign in to see your reports")}
-        action={
-          <ButtonLink href="/login?next=/my-reports" variant="primary">
-            {t("Нэвтрэх", "Sign in")}
-          </ButtonLink>
-        }
-      />
+      <>
+        <h1 className="sr-only">{t("Миний мэдээлэл", "My reports")}</h1>
+        <EmptyState
+          className="py-24"
+          icon={LogIn}
+          title={t("Өөрийн мэдээллээ харахын тулд нэвтэрнэ үү", "Sign in to see your reports")}
+          action={
+            <ButtonLink href="/login?next=/my-reports" variant="primary">
+              {t("Нэвтрэх", "Sign in")}
+            </ButtonLink>
+          }
+        />
+      </>
     );
   }
 
