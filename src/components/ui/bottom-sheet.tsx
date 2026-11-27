@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 
 /** 0 = peek (handle and header only), 1 = half the container, 2 = almost all of it. */
@@ -19,6 +19,7 @@ export function BottomSheet({
   expandLabel,
   header,
   children,
+  resetScrollKey,
   className,
 }: {
   snap: SheetSnap;
@@ -32,9 +33,15 @@ export function BottomSheet({
   /** Shown next to the grab bar, always visible. */
   header: React.ReactNode;
   children: React.ReactNode;
+  /** When this changes (a new filter, a new search) the content scrolls back to the top. */
+  resetScrollKey?: string;
   className?: string;
 }) {
   const sheet = useRef<HTMLElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    body.current?.scrollTo({ top: 0 });
+  }, [resetScrollKey]);
   const [room, setRoom] = useState(0);
   const [live, setLive] = useState<number | null>(null);
   const gesture = useRef<{ y: number; h: number; t: number; moved: boolean } | null>(null);
@@ -49,7 +56,9 @@ export function BottomSheet({
     return () => ro.disconnect();
   }, []);
 
-  const stops = [peek, Math.round(room * 0.52), Math.max(peek, room - 8)];
+  const full = Math.max(peek, room - 8);
+  // Half is a share of the room, but never so short that a list row or a message gets cut off.
+  const stops = [peek, Math.min(full, Math.max(Math.round(room * 0.52), 300)), full];
   const height = live ?? stops[snap];
   const clamp = (h: number) => Math.min(stops[2], Math.max(peek, h));
   const nearest = (h: number): SheetSnap =>
@@ -112,7 +121,7 @@ export function BottomSheet({
         <span aria-hidden className="h-1 w-10 rounded-full bg-line-strong" />
         <span className="w-full text-small text-ink-subtle">{header}</span>
       </button>
-      <div inert={snap === 0} className={cn("min-h-0 flex-1 border-t border-line", snap === 0 ? "overflow-hidden" : "overflow-y-auto overscroll-contain")}>
+      <div ref={body} inert={snap === 0} className={cn("min-h-0 flex-1 border-t border-line", snap === 0 ? "overflow-hidden" : "overflow-y-auto overscroll-contain")}>
         {children}
       </div>
     </section>

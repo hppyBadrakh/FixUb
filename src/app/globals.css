@@ -404,3 +404,9 @@
 .fx-map-marker {
   will-change: transform;
 }
+
+/* On a phone the report list is a sheet over the map: keep the map credit above it. */
+.maplibregl-ctrl-bottom-right,
+.maplibregl-ctrl-bottom-left {
+  margin-bottom: var(--sheet, 0px);
+}
