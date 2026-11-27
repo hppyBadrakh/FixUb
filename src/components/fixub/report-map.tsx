@@ -79,6 +79,7 @@ export function ReportMap({
   onLocateError,
   schematicLabel,
   detailHref,
+  compact = false,
 }: {
   reports?: Report[];
   selectedId?: string | null;
@@ -96,6 +97,8 @@ export function ReportMap({
   schematicLabel?: string;
   /** Where the info panel's "Open full report" link goes. Markers always open the panel. */
   detailHref?: (id: string) => string;
+  /** Phone-first panel: title, place, status and one Open action. */
+  compact?: boolean;
 }) {
   const { lang, t, pick: pickBi } = useT();
   const { catalog } = useStore();
@@ -415,7 +418,7 @@ export function ReportMap({
         <button
           type="button"
           onClick={locate}
-          className="absolute bottom-8 right-2.5 inline-flex h-10 items-center gap-2 rounded-sm bg-surface-overlay px-3 text-small font-[600] text-ink shadow-md hover:bg-surface-sunken [@media(pointer:coarse)]:h-11"
+          className="absolute bottom-[calc(var(--sheet,0px)+2rem)] right-2.5 inline-flex h-10 items-center gap-2 rounded-sm bg-surface-overlay px-3 text-small font-[600] text-ink shadow-md hover:bg-surface-sunken [@media(pointer:coarse)]:h-11"
         >
           <LocateFixed aria-hidden className={cn("size-5", locating && "fx-spin")} strokeWidth={1.75} />
           {mode === "pick" ? t("Миний байршил", "Use my location") : <span className="sr-only sm:not-sr-only">{t("Миний байршил", "My location")}</span>}
@@ -443,7 +446,7 @@ export function ReportMap({
       )}
 
       {selected && mode === "browse" && (
-        <div className="pointer-events-none absolute inset-x-2.5 bottom-2.5 z-10 flex justify-center md:bottom-4">
+        <div className="pointer-events-none absolute inset-x-2.5 bottom-[calc(var(--sheet,0px)+0.625rem)] z-10 flex justify-center md:bottom-4">
           <section
             aria-label={t("Сонгосон мэдээлэл", "Selected report")}
             className="pointer-events-auto w-full max-w-[400px] rounded-md border border-line bg-surface-overlay p-3.5 shadow-md fx-rise"
@@ -451,7 +454,7 @@ export function ReportMap({
             <div className="flex items-start gap-2">
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
                 <StatusBadge status={selected.status} reason={selected.closureReason} />
-                <PriorityBadge priority={selected.priority} />
+                {!compact && <PriorityBadge priority={selected.priority} />}
                 <span className="text-caption font-[600] text-ink-subtle tnum">{selected.ref}</span>
               </div>
               <button
@@ -463,22 +466,43 @@ export function ReportMap({
                 <X aria-hidden className="size-4" />
               </button>
             </div>
-            <p className="mt-1.5 text-label font-[650] leading-snug">{catalog.subLabel(selected.category, selected.subcategory, lang)}</p>
-            <CategoryTag category={selected.category} className="mt-0.5" />
-            <p className="mt-1.5 text-small text-ink">
-              {[placeOf(selected, lang), pickBi(DISTRICT_META[selected.district].label)].filter(Boolean).join(" · ")}
-            </p>
-            <p className="text-caption text-ink-subtle">
-              {t("Мэдээлсэн", "Reported")} {formatDateTime(selected.createdAt, lang)} · {timeAgo(selected.createdAt, now, lang)}
-            </p>
-            <p className="mt-1.5 line-clamp-2 text-small text-ink-muted">{descriptionOf(selected, lang)}</p>
-            {detailHref && (
-              <Link
-                href={detailHref(selected.id)}
-                className="mt-2 inline-flex items-center gap-1 text-small font-[650] text-brand hover:underline"
-              >
-                {t("Бүрэн мэдээллийг нээх", "Open full report")} <ArrowRight aria-hidden className="size-4" />
-              </Link>
+            {compact ? (
+              <>
+                <p className="mt-1.5 text-label font-[650] leading-snug">{catalog.subLabel(selected.category, selected.subcategory, lang)}</p>
+                <p className="mt-0.5 text-small text-ink-muted">
+                  {[placeOf(selected, lang), pickBi(DISTRICT_META[selected.district].label), timeAgo(selected.createdAt, now, lang)]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+                {detailHref && (
+                  <Link
+                    href={detailHref(selected.id)}
+                    className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-sm bg-brand text-label font-[600] text-on-brand hover:bg-brand-hover"
+                  >
+                    {t("Нээх", "Open")} <ArrowRight aria-hidden className="size-4" />
+                  </Link>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="mt-1.5 text-label font-[650] leading-snug">{catalog.subLabel(selected.category, selected.subcategory, lang)}</p>
+                <CategoryTag category={selected.category} className="mt-0.5" />
+                <p className="mt-1.5 text-small text-ink">
+                  {[placeOf(selected, lang), pickBi(DISTRICT_META[selected.district].label)].filter(Boolean).join(" · ")}
+                </p>
+                <p className="text-caption text-ink-subtle">
+                  {t("Мэдээлсэн", "Reported")} {formatDateTime(selected.createdAt, lang)} · {timeAgo(selected.createdAt, now, lang)}
+                </p>
+                <p className="mt-1.5 line-clamp-2 text-small text-ink-muted">{descriptionOf(selected, lang)}</p>
+                {detailHref && (
+                  <Link
+                    href={detailHref(selected.id)}
+                    className="mt-2 inline-flex items-center gap-1 text-small font-[650] text-brand hover:underline"
+                  >
+                    {t("Бүрэн мэдээллийг нээх", "Open full report")} <ArrowRight aria-hidden className="size-4" />
+                  </Link>
+                )}
+              </>
             )}
           </section>
         </div>

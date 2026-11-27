@@ -2,18 +2,18 @@
 
 /* FixUB design tokens (Design System v1.0). Light theme. */
 :root {
-  --bg: #f4f5f7;
-  --surface: #ffffff;
-  --surface-sunken: #eceef2;
-  --surface-overlay: #ffffff;
-  --line: #dde1e7;
+  --bg: #f2f4f6;
+  --surface: #fbfcfc;
+  --surface-sunken: #e8ecef;
+  --surface-overlay: #fbfcfc;
+  --line: #dbe1e6;
   --line-strong: #858d9b;
-  --ink: #121722;
-  --ink-muted: #4a5262;
-  --ink-subtle: #626b7b;
-  --brand: #1b3e73;
-  --brand-hover: #142f59;
-  --brand-soft: #e4ebf5;
+  --ink: #1d2733;
+  --ink-muted: #4b5866;
+  --ink-subtle: #5f6c79;
+  --brand: #2c5aa8;
+  --brand-hover: #244c92;
+  --brand-soft: #e3ebf7;
   --on-brand: #ffffff;
   --accent: #0a6b78;
   --accent-soft: #dcf0f2;

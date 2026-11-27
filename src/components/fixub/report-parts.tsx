@@ -78,6 +78,36 @@ export const ReportCard = forwardRef<
   );
 });
 
+/* ---------- ReportRow ---------- */
+
+/** Phone-first list row: what, where, how long ago, and one status. Two lines of text. */
+export const ReportRow = forwardRef<
+  HTMLButtonElement,
+  { report: Report; now: number; selected?: boolean; fresh?: boolean; onOpen: (id: string) => void }
+>(function ReportRow({ report, now, selected, fresh, onOpen }, ref) {
+  const { lang, pick } = useT();
+  const { catalog } = useStore();
+  return (
+    <button
+      ref={ref}
+      type="button"
+      aria-current={selected || undefined}
+      onClick={() => onOpen(report.id)}
+      className={cn(
+        "grid min-h-[72px] w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-4 py-3 text-left transition-colors duration-[140ms]",
+        selected ? "bg-brand-soft" : "hover:bg-bg",
+        fresh && "fx-fresh",
+      )}
+    >
+      <span className="line-clamp-2 text-body font-[600] leading-snug text-ink">{reportTitle(report, lang, catalog)}</span>
+      <StatusBadge status={report.status} reason={report.closureReason} className="row-span-2 self-center" />
+      <span className="text-small text-ink-subtle">
+        {pick(DISTRICT_META[report.district].label)} · {timeAgo(report.createdAt, now, lang)}
+      </span>
+    </button>
+  );
+});
+
 /* ---------- StatusTimeline ---------- */
 
 function eventTitle(e: TimelineEvent, state: AppState, t: (mn: string, en: string) => string, pick: (b: { mn: string; en: string }) => string) {
