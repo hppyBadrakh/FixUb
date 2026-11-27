@@ -10,6 +10,7 @@ import { cn } from "@/lib/cn";
 import { useT } from "@/lib/i18n";
 import { ROLE_LABEL } from "@/lib/meta";
 import { useStore } from "@/lib/store";
+import { safeNextPath } from "@/lib/safe-next";
 import type { User } from "@/lib/types";
 
 function homeFor(u: User) {
@@ -26,7 +27,7 @@ export function LoginPage() {
   const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
   const next = params.get("next");
-  const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : null;
+  const safeNext = safeNextPath(next);
 
   if (!ready) return <PageSkeleton />;
 
